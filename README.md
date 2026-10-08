@@ -1,6 +1,6 @@
 # GridTalk
 
-GridTalk is a local UDP voice-activity overlay for Assetto Corsa, version 0.3.0.
+GridTalk is a local UDP voice-activity overlay for Assetto Corsa, version 0.4.0.
 The provider-neutral Python app receives channel rosters and speaking events
 from voice-app senders on `127.0.0.1:9999`. Multiple sources can share the port;
 their rosters, user IDs, resets, and timeouts are handled independently.
@@ -35,7 +35,7 @@ For manual installation, replace BOTH files:
 - Copy the entire `ac_app/GridTalk` folder, including `assets`, into `<AC>/apps/python`.
 
 Restart TeamSpeak and enable **Assetto Corsa Notifier** under Tools > Options > Addons.
-Check that its version is **0.3.0**. Enable GridTalk in AC's Python app settings
+Check that its version is **0.4.0**. Enable GridTalk in AC's Python app settings
 and open it from the in-game apps bar. The DLL is x64; use the 64-bit TS client.
 
 ## Connection diagnosis

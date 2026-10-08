@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-10-08
 
 - Rename the project/AC overlay to GridTalk and the TS addon to Assetto Corsa Notifier.
 - Isolate UDP roster and speaking state per sender source, allowing multiple providers.

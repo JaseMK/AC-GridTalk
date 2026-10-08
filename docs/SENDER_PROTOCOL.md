@@ -8,7 +8,7 @@ is not included.
 
 The machine-readable contract is [gridtalk-v2.schema.json](../protocol/gridtalk-v2.schema.json).
 It uses JSON Schema Draft 2020-12. [Example packets](../protocol/examples)
-cover every event. Application version 0.3.0 and wire version 2 are independent.
+cover every event. Application version 0.4.0 and wire version 2 are independent.
 
 ## Transport and limits
 

@@ -1,4 +1,4 @@
-"""GridTalk 0.3.0: UDP voice roster and speaking indicators."""
+"""GridTalk 0.4.0: UDP voice roster and speaking indicators."""
 import errno
 import json
 import socket
@@ -55,7 +55,7 @@ def acMain(ac_version):
         candidate.bind(("127.0.0.1", PORT))
         candidate.setblocking(False)
         _socket = candidate
-        ac.log("GridTalk 0.3.0 listening on 127.0.0.1:" + str(PORT))
+        ac.log("GridTalk 0.4.0 listening on 127.0.0.1:" + str(PORT))
     except OSError as exc:
         candidate.close()
         ac.setText(_status, "UDP port unavailable: " + str(PORT))

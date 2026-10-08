@@ -30,7 +30,7 @@ static void log_message(const char* text, enum LogLevel level) {
 }
 
 EXPORT const char* ts3plugin_name(void) { return "Assetto Corsa Notifier"; }
-EXPORT const char* ts3plugin_version(void) { return "0.3.0"; }
+EXPORT const char* ts3plugin_version(void) { return "0.4.0"; }
 EXPORT int ts3plugin_apiVersion(void) { return 26; }
 EXPORT const char* ts3plugin_author(void) { return "GridTalk"; }
 EXPORT const char* ts3plugin_description(void) { return "Sends your TeamSpeak channel roster and live speaking status to GridTalk over local UDP (127.0.0.1:" STRINGIFY_PORT "). Enable this addon, then enable GridTalk in Assetto Corsa."; }
@@ -69,7 +69,7 @@ EXPORT int ts3plugin_init(void) {
         log_message("Could not start channel snapshot timer", LogLevel_ERROR);
         closesocket(udp); udp = INVALID_SOCKET; WSACleanup(); return 1;
     }
-    log_message("v0.3.0 started: speaking events + 1-second channel snapshots to 127.0.0.1:" STRINGIFY_PORT, LogLevel_INFO);
+    log_message("v0.4.0 started: speaking events + 1-second channel snapshots to 127.0.0.1:" STRINGIFY_PORT, LogLevel_INFO);
     send_packet("{\"v\":1,\"source\":\"teamspeak\",\"event\":\"reset\"}");
     send_snapshot();
     return 0;

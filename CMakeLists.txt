@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(GridTalk VERSION 0.3.0 LANGUAGES C)
+project(GridTalk VERSION 0.4.0 LANGUAGES C)
 if(NOT WIN32)
   message(FATAL_ERROR "This plugin targets Windows TeamSpeak")
 endif()

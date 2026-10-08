@@ -250,7 +250,8 @@ installer failure injection, live AC display/resource stress, or FPS A/B runs.
 3. Filter/coalesce TS roster refreshes and validate timer/thread/unload behavior
    in the actual host. Add checked native formatting and boundary tests.
 4. Make install/upgrade rollback complete and verify renamed live addon/app
-   behavior. Give the next build a distinct version or build revision; current
-   working changes still report 0.3.0 while the old release tag is immutable.
+   behavior. The assessed changes are now versioned 0.4.0; give subsequent
+   hardening builds a distinct version or build revision. The old release tag
+   remains immutable.
 5. Run repeatable FPS/CPU/memory A/B tests on the hardened revision, then profile
    only demonstrated hotspots. Save raw data, exact revision, and settings.

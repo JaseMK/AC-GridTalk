@@ -6,7 +6,7 @@ The plan below records future work, not permission to start every item now.
 
 ## Current position
 
-- v0.3.0 is the existing Git release tag.
+- Current application version is v0.4.0; v0.3.0 remains the existing Git release tag.
 - Offline Python/UDP benchmarks and initial UI optimisations are complete;
   see [the performance assessment](docs/PERFORMANCE.md).
 - Offline performance changes are complete. GridTalk branding, independent UDP
