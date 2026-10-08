@@ -4,15 +4,21 @@ This is a diagnostic probe, not a suite that expects these bugs to remain.
 Output is written under ignored build/; baseline evidence is in docs/.
 """
 import importlib.util
+import argparse
 import json
 from pathlib import Path
 import time
+import subprocess
 
 root = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('benchmark', root / 'tools/benchmark.py')
 bench = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bench)
-source = (root / 'ac_app/GridTalk/GridTalk.py').read_text(encoding='utf-8')
+parser = argparse.ArgumentParser()
+parser.add_argument('--ref', help='Historical Git revision to reproduce the original findings')
+args = parser.parse_args()
+source = (subprocess.check_output(['git', 'show', args.ref + ':ac_app/GridTalk/GridTalk.py'], cwd=str(root)).decode('utf-8')
+          if args.ref else (root / 'ac_app/GridTalk/GridTalk.py').read_text(encoding='utf-8'))
 results = {}
 
 def fresh():
@@ -73,7 +79,7 @@ try:
     for i in range(2):
         packet['clients'].append(dict(client_id=1, name='Duplicate ' + str(i), talking=False, self=False))
     app._accept(packet, 100)
-    results['duplicate_id_overwrites'] = app._members[('teamspeak', 1)]['name']
+    results['duplicate_id_overwrites'] = app._members.get(('teamspeak', 1), {}).get('name')
     app._accept(dict(v=2, source='teamspeak', event='talk', server='123', channel='7', client_id=1, talking=True), 100)
     packet['snapshot'] = 3
     packet['clients'] = [dict(client_id=1, name='Driver', talking=None, self=True)]
@@ -91,7 +97,7 @@ try:
     start = time.perf_counter()
     app._render(100)
     results['large_roster'] = {'users': len(app._members), 'native_labels_created': calls['addLabel'],
-                             'window_height': app._layout_key and 32 + count * 28 + 4,
+                             'window_height': (54 if app._visual_status else 32) + len(app._shapes) * 28 + 4,
                              'mocked_render_ms': round((time.perf_counter() - start) * 1000, 3)}
     packet = state(2)
     packet['clients'][0]['name'] = 'W' * 10000

@@ -2,6 +2,11 @@
 
 ## Conclusion
 
+The v0.4.1 safety work is described in [HARDENING.md](HARDENING.md), with raw
+results in `performance-hardened.json`. Earlier captures below are retained as
+baselines. Validation adds packet-processing work; normal idle cost remains
+around 0.003 ms, and native display resources are now capped.
+
 Offline measurements show small Python costs for normal channel sizes. The main
 avoidable cost was excessive calls into AC whenever speaking state changed;
 this has been reduced. **Zero FPS impact has not been established.** AC and

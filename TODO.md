@@ -6,14 +6,14 @@ The plan below records future work, not permission to start every item now.
 
 ## Current position
 
-- Current application version is v0.4.0; v0.3.0 remains the existing Git release tag.
+- Current application version is v0.4.1; v0.3.0 remains the existing Git release tag.
 - Offline Python/UDP benchmarks and initial UI optimisations are complete;
   see [the performance assessment](docs/PERFORMANCE.md).
 - Offline performance changes are complete. GridTalk branding, independent UDP
   sources, and the public sender schema/guide are implemented and installed.
 - The offline code review is complete; see [findings and evidence](docs/CODE_REVIEW.md).
-  Its fixes and host-dependent validation are pending. No in-game FPS A/B
-  comparison has been completed.
+  Code improvements R1–R10 are implemented; see [the hardening report](docs/HARDENING.md).
+  Host-dependent validation and in-game FPS A/B comparison remain pending.
 
 ## P1 — Performance and reliability
 
@@ -31,26 +31,28 @@ The plan below records future work, not permission to start every item now.
   snapshot/event ordering, repeated allocations, and native UI/rendering work.
   Findings, severity, evidence, and implementation order are recorded in
   [the review](docs/CODE_REVIEW.md).
-- [ ] **Fix receiver admission and resource limits (R1–R5).** Bound roster size,
+- [x] **Fix receiver admission and resource limits (R1–R5).** Bound roster size,
   strings, retained bytes, native controls, and JSON nesting. Validate before
   allocating source state or refreshing timestamps. Enforce coherent pages,
   exact integer IDs, and unique members; reclaim expired source slots safely.
-- [ ] **Correct voice-state freshness (R3/R6).** Separate bridge liveness from
+- [x] **Correct voice-state freshness (R3/R6).** Separate bridge liveness from
   roster/speaking freshness. Require trustworthy data after timeout and bound
   retention of unknown speaking values; test transient and sustained failures.
-- [ ] **Harden native lifecycle and roster refreshes (R8–R10).** Establish actual
-  TS callback thread/unload behavior, filter/coalesce unrelated move events,
+- [x] **Harden native lifecycle and roster refreshes (R8–R10).** Add lifecycle
+  synchronization, owned-window timers, and actual DLL-unload tests; filter/coalesce unrelated move events,
   and use checked capacity-aware formatting. Preserve immediate PTT behavior.
+- [x] **Harden installation and rollback (R7).** Stage and verify the manifest,
+  back up complete assets, swap the app directory, restore failed upgrades and
+  migration, and use unique backup paths. Failure-injection tests pass.
 - [ ] **Validate real-session reliability and resource use.** Exercise held and
   rapid PTT, simultaneous speakers, joins/leaves, channel/tab changes, reconnects,
   client/app restart order, and port conflicts. Run a long session and observe
   CPU, memory, handles, and retained row controls. Verify recovery from delayed,
   lost, reordered, incomplete, or malformed packets. Use synthetic traffic for
   larger-roster stress cases and label those results separately from live tests.
-- [ ] **Review limits for large rosters and packet bursts.** The packet-count cap
-  is not a wall-clock budget. Check snapshot assembly and layout spikes, window
-  height, and rendering cost as channel size grows. Add limits or deferred work
-  only where measurements justify them.
+- [x] **Bound large rosters and packet bursts.** Add storage, packet, page, text,
+  and UI limits plus a receive time budget. Regression tests check the limits;
+  live native-rendering cost remains part of FPS and resource validation.
 
 Completion evidence: repeatable in-game results, documented review findings,
 passing regression checks, and no unexplained FPS/CPU/memory regressions.
@@ -92,8 +94,8 @@ change, and a sourced compatibility assessment with a concrete recommendation.
 - [ ] **Prepare a reproducible installation/release package.** Bundle the DLL,
   complete Python app and textures, installation instructions, and dependency
   notices. Validate installation, upgrade, backup, and removal on a clean setup
-  without requiring users to compile. Add complete asset backups, staging,
-  rollback, unique backup paths, and failure-injection checks (R7).
+  without requiring users to compile. Complete asset backups, staging,
+  rollback, unique backup paths, and failure-injection checks (R7) are implemented.
   Test missing assets and plugin-disabled
   diagnostics. Keep the pinned SDK build reproducible.
 - [ ] **Prepare the next release after hardening.** Review and

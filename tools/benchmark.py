@@ -108,9 +108,16 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--iterations", type=int, default=3000)
     args = parser.parse_args()
-    source = (subprocess.check_output(["git", "show", args.ref + ":ac_app/TSVoice/TSVoice.py"],
-                                     cwd=str(ROOT)).decode("utf-8") if args.ref else
-              (ROOT / "ac_app/GridTalk/GridTalk.py").read_text(encoding="utf-8"))
+    if args.ref:
+        for path in ('ac_app/GridTalk/GridTalk.py', 'ac_app/TSVoice/TSVoice.py'):
+            result = subprocess.run(['git', 'show', args.ref + ':' + path], cwd=str(ROOT), capture_output=True)
+            if result.returncode == 0:
+                source = result.stdout.decode('utf-8')
+                break
+        else:
+            raise SystemExit('No overlay source found at Git revision ' + args.ref)
+    else:
+        source = (ROOT / 'ac_app/GridTalk/GridTalk.py').read_text(encoding='utf-8')
     rows = [measure(source, count, scenario, args.iterations) for count in (2, 16, 64)
             for scenario in ("idle_update", "unchanged_snapshot", "speaking_transition", "burst_32", "draw_submission")]
     result = {"python": sys.version, "platform": platform.platform(), "source": args.ref or "working tree",

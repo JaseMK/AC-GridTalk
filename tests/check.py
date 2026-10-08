@@ -166,6 +166,7 @@ assert len(app._members) == 2 and ("teamspeak", 42) in app._members
 send(discord); tick()
 now = time.monotonic()
 app._sources["teamspeak"].last_packet = now - 6
+app._sources["teamspeak"].check_at = 0  # invalidate cached expiry after changing the test clock
 app._sources["discord"].last_packet = now
 tick()
 assert not app._members[("teamspeak", 42)]["talking"]

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:gridtalk:packet:2",
   "title": "GridTalk UDP packet protocol v2",
-  "description": "One UTF-8 JSON object per UDP datagram to 127.0.0.1:9999. Includes the legacy v1 reset emitted by the TS3 sender. See docs/SENDER_PROTOCOL.md for cross-packet constraints and lifecycle.",
+  "description": "One UTF-8 JSON object per UDP datagram to 127.0.0.1:9999. Includes the legacy v1 reset emitted by the TS3 sender. See docs/SENDER_PROTOCOL.md for cross-packet constraints and lifecycle. GridTalk 0.4.1 resource profile: 32 pages, 256 total committed members, 32 KiB datagrams, 128 KiB normalized pending state per source. Additional cross-packet/depth limits are documented in the guide.",
   "$defs": {
     "client": {
       "type": "object",
@@ -21,14 +21,16 @@
         },
         "name": {
           "type": "string",
-          "description": "Display name; UTF-8, including Unicode and escaped JSON characters."
+          "description": "Display name; UTF-8, including Unicode and escaped JSON characters.",
+          "maxLength": 512,
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "talking": {
           "type": [
             "boolean",
             "null"
           ],
-          "description": "True means transmitting. Null means unknown: retain previous state in the same channel or default to false."
+          "description": "True means transmitting. Null retains the previous state in the same channel only while its last valid update is at most five seconds old; otherwise false."
         },
         "self": {
           "type": "boolean",
@@ -60,7 +62,8 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it."
+          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it.",
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "event": {
           "const": "state"
@@ -74,27 +77,35 @@
         "page": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 8191,
+          "maximum": 31,
           "description": "Zero-based page index; must be less than pages (semantic constraint)."
         },
         "pages": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 8192
+          "maximum": 32
         },
         "connected": {
           "type": "boolean"
         },
         "server": {
           "type": "string",
-          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "channel": {
           "type": "string",
-          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "channel_name": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 512,
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "clients": {
           "type": "array",
@@ -131,6 +142,25 @@
               "clients": {
                 "maxItems": 0
               }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "server"
+                  ]
+                },
+                {
+                  "required": [
+                    "channel"
+                  ]
+                },
+                {
+                  "required": [
+                    "channel_name"
+                  ]
+                }
+              ]
             }
           }
         }
@@ -156,18 +186,25 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it."
+          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it.",
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "event": {
           "const": "talk"
         },
         "server": {
           "type": "string",
-          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "channel": {
           "type": "string",
-          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "client_id": {
           "type": "integer",
@@ -180,7 +217,9 @@
         },
         "name": {
           "type": "string",
-          "description": "Informational only; roster names are updated by snapshots."
+          "description": "Informational only; roster names are updated by snapshots.",
+          "maxLength": 512,
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "self": {
           "type": "boolean",
@@ -209,14 +248,18 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it."
+          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it.",
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "event": {
           "const": "reset"
         },
         "server": {
           "type": "string",
-          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         }
       },
       "additionalProperties": true
@@ -238,13 +281,16 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it."
+          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it.",
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "event": {
           "const": "bridge_status"
         },
         "message": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         }
       },
       "additionalProperties": true
@@ -264,14 +310,18 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it."
+          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it.",
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         },
         "event": {
           "const": "reset"
         },
         "server": {
           "type": "string",
-          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\u0000\\uD800-\\uDFFF]*$"
         }
       },
       "additionalProperties": true

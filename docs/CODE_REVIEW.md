@@ -2,6 +2,11 @@
 
 ## Scope and result
 
+This report describes the v0.4.0 baseline. The code improvements are implemented
+in v0.4.1; see [HARDENING.md](HARDENING.md) for their status and validation.
+Original evidence is retained for comparison. To reproduce the baseline, run
+`python tools/audit_receiver.py --ref 71a1e9b`.
+
 Reviewed the current DLL, GridTalk receiver, installer, CMake build, public
 protocol, tests, diagnostic tools, and UI asset generation. This includes the
 rename and multiple-source implementation, plus the previous performance work.

@@ -1,6 +1,6 @@
 # GridTalk
 
-GridTalk is a local UDP voice-activity overlay for Assetto Corsa, version 0.4.0.
+GridTalk is a local UDP voice-activity overlay for Assetto Corsa, version 0.4.1.
 The provider-neutral Python app receives channel rosters and speaking events
 from voice-app senders on `127.0.0.1:9999`. Multiple sources can share the port;
 their rosters, user IDs, resets, and timeouts are handled independently.
@@ -13,11 +13,11 @@ integration is not included yet.
 
 The overlay shows fixed-position red/green speaking dots, displays names in white
 with bold white for active speakers, and marks your own name. The shaded grey
-app shows the whole roster with no paging buttons or packet counter. Each user
+app shows up to 24 users (with an overflow count) with no paging buttons or packet counter. Each user
 has a darker rounded pill and a larger shaded traffic light; active pills take
 on a subtle green tint. Small cached textures provide the rounded ends and shaded
 lights using AC's textured-quad renderer. Its height
-fits the number of users; width is estimated from the displayed names with padding.
+fits the visible users; width is capped at 420 pixels and long names are clipped.
 Names are TeamSpeak display names, not automatically mapped to AC cars.
 
 ## Install or upgrade
@@ -35,7 +35,7 @@ For manual installation, replace BOTH files:
 - Copy the entire `ac_app/GridTalk` folder, including `assets`, into `<AC>/apps/python`.
 
 Restart TeamSpeak and enable **Assetto Corsa Notifier** under Tools > Options > Addons.
-Check that its version is **0.4.0**. Enable GridTalk in AC's Python app settings
+Check that its version is **0.4.1**. Enable GridTalk in AC's Python app settings
 and open it from the in-game apps bar. The DLL is x64; use the 64-bit TS client.
 
 ## Connection diagnosis
@@ -58,8 +58,9 @@ AC's `Documents/Assetto Corsa/logs/py_log.txt` contains receiver startup/errors.
 
 See [the measured performance assessment](docs/PERFORMANCE.md) for benchmark
 results, optimizations, and the remaining in-game FPS comparison.
-The [code assessment](docs/CODE_REVIEW.md) records confirmed robustness bugs,
-security boundaries, host-dependent risks, and prioritized improvements.
+The [code assessment](docs/CODE_REVIEW.md) records the original findings;
+[the hardening report](docs/HARDENING.md) records the implemented fixes,
+regression evidence, and remaining live checks.
 
 Speaking transitions arrive immediately through the TS callback. A one-second
 roster refresh uses `getClientSelfVariableAsInt` for your own transmission state,
@@ -69,11 +70,13 @@ A one-second
 timer sends complete channel state, so an app started later receives the roster
 and speaking state without needing someone to start talking. Snapshots also
 repair missed UDP events and refresh joins, departures, moves, and name changes.
-The timer runs on TeamSpeak's plugin-init thread message loop, not a worker thread.
+The timer uses an owned message window on TeamSpeak's plugin-init thread.
+Shutdown destroys that window and waits for admitted callbacks before closing UDP.
 There is no audio transmission or server polling.
 
 The AC receiver is nonblocking. An idle frame makes one receive attempt, and a
-busy frame handles at most 32 datagrams. State changes update the display promptly;
+busy frame handles at most 32 datagrams, with a 1 ms receive budget checked every
+four packets. Packet, snapshot, text, and UI limits bound retained resources. State changes update the display promptly;
 the connection status refreshes at most once per second while idle. UDP does not
 guarantee delivery; lost snapshot pages are discarded and the next complete
 snapshot replaces them. Update latency for roster changes is normally up to one
@@ -132,3 +135,15 @@ requires Pillow, which is not needed by the in-game app.
 Change the destination using `-DGRIDTALK_UDP_PORT=9999` and the Python `PORT` constant
 (also update the diagnostic listener). The fetched SDK is ignored by git; its
 upstream licensing terms apply to its headers.
+
+Hardening regression checks (native test build uses port 19999):
+
+```powershell
+python tests/receiver_hardening.py
+python tests/native_hardening.py
+./tests/installer.ps1
+```
+
+The native/schema checks use the development-only validator described in the
+sender guide. Installer failure tests use isolated fake installations under
+`build/`; the live game installation is not modified by those tests.

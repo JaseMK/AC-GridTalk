@@ -8,7 +8,7 @@ is not included.
 
 The machine-readable contract is [gridtalk-v2.schema.json](../protocol/gridtalk-v2.schema.json).
 It uses JSON Schema Draft 2020-12. [Example packets](../protocol/examples)
-cover every event. Application version 0.4.0 and wire version 2 are independent.
+cover every event. Application version 0.4.1 and wire version 2 are independent.
 
 ## Transport and limits
 
@@ -18,17 +18,33 @@ JSON object between datagrams. The destination can be changed at build/config
 time, but both sender and receiver must agree. GridTalk sends no acknowledgments
 or requests. Only one receiver can bind this port; multiple senders may send to it.
 
-- Maximum IPv4 UDP payload: 65,507 bytes, including all JSON and UTF-8 bytes.
-  Keep packets small; roster pages contain at most eight users.
-- At most 8,192 pages per snapshot, with indexes from zero through `pages - 1`.
-- At most 16 distinct `source` values per AC app session. Use stable identities;
-  do not generate a new identity on every packet or restart.
-- GridTalk processes at most 32 packets per AC update. Avoid packet floods;
-  send transitions immediately and refresh the roster about once per second.
-- A source becomes stale after more than five seconds without a recognized
-  packet. Its users remain listed but their speaking indicators turn off.
-  A fresh valid snapshot repairs their state. Incomplete snapshots also expire
-  after five seconds from their first page.
+- Receiver payload limit: **32,768 bytes**, including JSON and UTF-8 bytes.
+  IPv4 permits larger datagrams, but this receiver rejects them.
+- At most **32 pages**, eight users per page, and **256 committed users total**
+  across all senders. The native TS sender also caps its channel at 256 users.
+- Maximum normalized pending member storage: **128 KiB per source**; at most
+  256 pending talk overrides. Only known fields are retained.
+- At most **16 resident sources**. Valid data is required before admission;
+  unknown-source talk/reset packets cannot reserve a slot. Disconnected sources
+  may be reclaimed to admit another sender. Silent sources are retired after
+  60 seconds; a bounded cache of 32 sequence floors lasts up to five minutes.
+  Use stable source identities. Reset clears a retained sequence floor.
+- JSON depth is limited to eight levels and 256 value nodes per datagram.
+  Extra fields are ignored only within these limits. Strings must contain no NUL
+  or unpaired Unicode surrogates. Integer literals longer than 17 characters
+  are rejected before integer conversion; use safe integers for protocol fields.
+- At most **32 packets per AC update**, with a **1 ms receive budget** checked
+  every four datagrams. This bounds batches approximately, not total frame time:
+  one group and subsequent bounded layout work can exceed the budget.
+- Voice data becomes stale after five seconds without an applicable member
+  event or complete fresh snapshot. Diagnostics, old snapshots, invalid packets,
+  and wrong-channel talk events cannot refresh it or restore green indicators.
+  Incomplete snapshots expire after five seconds from their first page.
+- A `talking:null` query retains its last valid member value for at most five
+  seconds. Repeated unknown queries do not extend that grace period.
+- UI resources are capped at **24 rows** and **420 pixels wide**. Longer names
+  are ellipsized; larger accepted rosters show a visible-user count. Hidden row
+  controls are reused, with no more than 97 native labels including status.
 
 UDP can lose, duplicate, or reorder packets. Periodic complete snapshots are
 essential for recovery and for an overlay started after the voice app.
@@ -66,12 +82,12 @@ sender output; it does not imply the runtime applies a JSON Schema validator.
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `snapshot` | integer, 0–9,007,199,254,740,991 | yes | Strictly increasing sequence for the source's snapshots, including disconnects. |
-| `page` | integer, 0–8,191 | yes | Zero-based page index; less than `pages`. |
-| `pages` | integer, 1–8,192 | yes | Total number of pages. |
+| `page` | integer, 0–31 | yes | Zero-based page index; less than `pages`. |
+| `pages` | integer, 1–32 | yes | Total number of pages. |
 | `connected` | boolean | yes | Whether this source has a current voice channel. |
-| `server` | string | when connected | Current server/workspace identity. |
-| `channel` | string | when connected | Current channel/call identity. |
-| `channel_name` | string | no | Human-readable channel name; defaults to empty. Currently not displayed. |
+| `server` | string, 1–128 characters | when connected | Current server/workspace identity. |
+| `channel` | string, 1–128 characters | when connected | Current channel/call identity. |
+| `channel_name` | string, up to 512 characters | no | Human-readable channel name; defaults to empty. Currently not displayed. |
 | `clients` | array, at most 8 items | yes | Members on this page. |
 
 Each client has all four fields:
@@ -79,8 +95,8 @@ Each client has all four fields:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `client_id` | positive safe integer | Stable identity in this channel. |
-| `name` | string | Display name; may contain Unicode. Empty names display as `Client <id>`. |
-| `talking` | boolean or null | `true` while transmitting; `false` otherwise. `null` means a query failed: retain the previous value in the same channel, or assume false for a new member. |
+| `name` | string, up to 512 characters | Display name; may contain Unicode. Empty names display as `Client <id>`. |
+| `talking` | boolean or null | `true` while transmitting; `false` otherwise. `null` means a query failed: retain the previous value in the same channel for up to five seconds from its last valid update, or assume false for a new member. |
 | `self` | boolean | Whether this is the sender's local user. GridTalk adds `(you)`. |
 
 Capture one consistent roster and split it into pages. All pages share source,
@@ -132,10 +148,10 @@ roster; they are not a supported format for new integrations.
 
 ## `bridge_status`: report a query/integration error
 
-Required `message` is a string, e.g. `Voice roster query failed`. It displays a
+Required `message` is a string of at most 256 characters, e.g. `Voice roster query failed`. It displays a
 diagnostic while preserving the source's last roster. A complete valid snapshot
-clears the diagnostic. Diagnostic packets count as activity, so they should not
-be used as the sole heartbeat when speaking values may be outdated. Use unknown
+clears the diagnostic. Diagnostic packets count as bridge activity but do not refresh voice data or
+speaking flags. They must not be used as the sole voice-state heartbeat. Use unknown
 talk values in a fresh roster when a speaking query fails.
 
 ## Startup, restart, and shutdown
@@ -149,12 +165,14 @@ talk values in a fresh roster when a speaking query fails.
    if the chosen clock starts again at zero for each process.
 4. Keep sequences increasing across sender restarts where possible. Reset is
    itself UDP and may be lost; a restart that starts again at sequence 1 can be
-   ignored by an existing receiver if the reset was lost. Staleness alone does
-   not reset the sequence floor. After a full machine reboot the AC receiver
+   ignored by an existing receiver if the reset was lost. A five-second voice timeout does not reset the sequence floor. Silent sources
+   are retired at 60 seconds; their floor is retained in a bounded cache for up
+   to five more minutes. Do not rely on eviction to restart sequence numbering. After a full machine reboot the AC receiver
    also restarts, so a system-uptime counter is suitable for the bundled sender.
 5. On channel change send a snapshot for the new context. On disconnect send
    the disconnected snapshot. On clean shutdown send reset; if it is lost, the
-   five-second timeout still clears speaking indicators but retains names.
+   five-second timeout clears speaking indicators. Silent sources and their names
+   are removed after 60 seconds.
 
 The local sender determines which channel and users to expose. The TS3 sender
 uses the current channel of the active server tab. Other providers can choose
@@ -170,7 +188,7 @@ udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def send(packet):
     data = json.dumps(packet, ensure_ascii=False, allow_nan=False).encode("utf-8")
-    if len(data) > 65507:
+    if len(data) > 32768:
         raise ValueError("UDP packet too large; paginate the roster")
     udp.sendto(data, ("127.0.0.1", 9999))
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.1 — 2026-10-08
+
+- Validate packets before source admission or freshness mutation; enforce IDs,
+  page consistency, unique members, text/nesting/storage limits, and safe integers.
+- Separate bridge activity from voice freshness; bound unknown query retention
+  and reclaim silent sources while retaining sequence floors temporarily.
+- Bound display rows/window width, clip long text, cache row order, and add an
+  approximate receive time budget alongside the packet-count cap.
+- Replace callback timers with an owned message window, serialize lifecycle and
+  socket access, drain admitted callbacks on shutdown, and test actual DLL unload.
+- Filter/coalesce relevant channel moves; add checked JSON formatting and UTF-8
+  boundary handling and validate destination ports.
+- Stage and hash-check installations; back up complete app assets, roll back failed
+  upgrades/migration, and use unique backup paths.
+- Add security/resource/freshness, installer failure, native boundary/lifecycle
+  regressions and an updated performance capture. Live FPS/host checks remain pending.
+
 ## 0.4.0 — 2026-10-08
 
 - Rename the project/AC overlay to GridTalk and the TS addon to Assetto Corsa Notifier.

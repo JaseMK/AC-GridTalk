@@ -21,7 +21,7 @@ def main():
         validator.validate(json.loads(path.read_text(encoding='utf-8')))
     state = json.loads((ROOT / 'protocol/examples/state.json').read_text(encoding='utf-8'))
     invalid = []
-    for key, value in [('snapshot', True), ('pages', 0), ('page', -1), ('connected', 'true'),
+    for key, value in [('snapshot', True), ('pages', 0), ('pages', 33), ('page', -1), ('connected', 'true'),
                        ('source', ''), ('v', 3), ('clients', state['clients'] * 5)]:
         packet = copy.deepcopy(state)
         packet[key] = value
@@ -29,6 +29,10 @@ def main():
     packet = copy.deepcopy(state)
     packet['clients'][0]['client_id'] = 9007199254740992
     invalid.append(packet)
+    for value in ('W' * 513, '\x00', '\ud800'):
+        packet = copy.deepcopy(state)
+        packet['clients'][0]['name'] = value
+        invalid.append(packet)
     packet = copy.deepcopy(state)
     packet['connected'] = False  # disconnected packets cannot carry members
     invalid.append(packet)
