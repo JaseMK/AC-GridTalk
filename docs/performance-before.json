@@ -1,0 +1,314 @@
+{
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "source": "v0.3.0",
+  "limitations": "Real UDP; mocked AC native UI and GPU. Not an FPS benchmark. Synthetic 120 Hz clock; CPU time is coarse on Windows.",
+  "results": [
+    {
+      "users": 2,
+      "scenario": "idle_update",
+      "samples": 3000,
+      "mean_us": 2.1,
+      "p95_us": 2.1,
+      "p99_us": 7.2,
+      "max_us": 54.6,
+      "cpu_seconds": 0.0156,
+      "ac_calls_per_sample": 0.3,
+      "calls": {
+        "setText": 125,
+        "setVisible": 275,
+        "setPosition": 200,
+        "setFontColor": 100,
+        "setSize": 175,
+        "setBackgroundOpacity": 25
+      },
+      "snapshot_bytes": 296
+    },
+    {
+      "users": 2,
+      "scenario": "unchanged_snapshot",
+      "samples": 3000,
+      "mean_us": 7.434,
+      "p95_us": 7.9,
+      "p99_us": 19.8,
+      "max_us": 47.2,
+      "cpu_seconds": 0.0156,
+      "ac_calls_per_sample": 0.3,
+      "calls": {
+        "setText": 125,
+        "setVisible": 275,
+        "setPosition": 200,
+        "setFontColor": 100,
+        "setSize": 175,
+        "setBackgroundOpacity": 25
+      },
+      "snapshot_bytes": 296
+    },
+    {
+      "users": 2,
+      "scenario": "speaking_transition",
+      "samples": 3000,
+      "mean_us": 16.227,
+      "p95_us": 18.2,
+      "p99_us": 35.3,
+      "max_us": 58.4,
+      "cpu_seconds": 0.0312,
+      "ac_calls_per_sample": 40.986,
+      "calls": {
+        "setText": 14995,
+        "setVisible": 32989,
+        "setPosition": 23992,
+        "setCustomFont": 2999,
+        "setFontSize": 2999,
+        "setFontColor": 11996,
+        "setSize": 20993,
+        "setBackgroundOpacity": 2999,
+        "setBackgroundTexture": 8997
+      },
+      "snapshot_bytes": 296
+    },
+    {
+      "users": 2,
+      "scenario": "burst_32",
+      "samples": 3000,
+      "mean_us": 90.117,
+      "p95_us": 116.7,
+      "p99_us": 155.3,
+      "max_us": 589.2,
+      "cpu_seconds": 0.2031,
+      "ac_calls_per_sample": 36.002,
+      "calls": {
+        "setText": 15000,
+        "setVisible": 33000,
+        "setPosition": 24000,
+        "setCustomFont": 1,
+        "setFontSize": 1,
+        "setFontColor": 12000,
+        "setSize": 21000,
+        "setBackgroundOpacity": 3000,
+        "setBackgroundTexture": 3
+      },
+      "snapshot_bytes": 296
+    },
+    {
+      "users": 2,
+      "scenario": "draw_submission",
+      "samples": 3000,
+      "mean_us": 0.519,
+      "p95_us": 0.6,
+      "p99_us": 0.6,
+      "max_us": 4.2,
+      "cpu_seconds": 0.0,
+      "ac_calls_per_sample": 3.0,
+      "calls": {
+        "glColor4f": 3000,
+        "glQuadTextured": 6000
+      },
+      "snapshot_bytes": 296
+    },
+    {
+      "users": 16,
+      "scenario": "idle_update",
+      "samples": 3000,
+      "mean_us": 2.694,
+      "p95_us": 2.1,
+      "p99_us": 19.0,
+      "max_us": 276.6,
+      "cpu_seconds": 0.0,
+      "ac_calls_per_sample": 2.167,
+      "calls": {
+        "setText": 825,
+        "setVisible": 2025,
+        "setPosition": 1600,
+        "setFontColor": 800,
+        "setSize": 1225,
+        "setBackgroundOpacity": 25
+      },
+      "snapshot_bytes": 1464
+    },
+    {
+      "users": 16,
+      "scenario": "unchanged_snapshot",
+      "samples": 3000,
+      "mean_us": 19.711,
+      "p95_us": 23.1,
+      "p99_us": 75.7,
+      "max_us": 242.7,
+      "cpu_seconds": 0.0781,
+      "ac_calls_per_sample": 2.167,
+      "calls": {
+        "setText": 825,
+        "setVisible": 2025,
+        "setPosition": 1600,
+        "setFontColor": 800,
+        "setSize": 1225,
+        "setBackgroundOpacity": 25
+      },
+      "snapshot_bytes": 1464
+    },
+    {
+      "users": 16,
+      "scenario": "speaking_transition",
+      "samples": 3000,
+      "mean_us": 75.957,
+      "p95_us": 97.2,
+      "p99_us": 137.5,
+      "max_us": 377.9,
+      "cpu_seconds": 0.2344,
+      "ac_calls_per_sample": 264.912,
+      "calls": {
+        "setText": 98967,
+        "setVisible": 242919,
+        "setPosition": 191936,
+        "setCustomFont": 2999,
+        "setFontSize": 2999,
+        "setFontColor": 95968,
+        "setSize": 146951,
+        "setBackgroundOpacity": 2999,
+        "setBackgroundTexture": 8997
+      },
+      "snapshot_bytes": 1464
+    },
+    {
+      "users": 16,
+      "scenario": "burst_32",
+      "samples": 3000,
+      "mean_us": 145.538,
+      "p95_us": 178.6,
+      "p99_us": 255.2,
+      "max_us": 686.9,
+      "cpu_seconds": 0.3906,
+      "ac_calls_per_sample": 260.002,
+      "calls": {
+        "setText": 99000,
+        "setVisible": 243000,
+        "setPosition": 192000,
+        "setCustomFont": 1,
+        "setFontSize": 1,
+        "setFontColor": 96000,
+        "setSize": 147000,
+        "setBackgroundOpacity": 3000,
+        "setBackgroundTexture": 3
+      },
+      "snapshot_bytes": 1464
+    },
+    {
+      "users": 16,
+      "scenario": "draw_submission",
+      "samples": 3000,
+      "mean_us": 2.467,
+      "p95_us": 2.6,
+      "p99_us": 2.7,
+      "max_us": 19.5,
+      "cpu_seconds": 0.0,
+      "ac_calls_per_sample": 17.0,
+      "calls": {
+        "glColor4f": 3000,
+        "glQuadTextured": 48000
+      },
+      "snapshot_bytes": 1464
+    },
+    {
+      "users": 64,
+      "scenario": "idle_update",
+      "samples": 3000,
+      "mean_us": 4.218,
+      "p95_us": 2.1,
+      "p99_us": 13.0,
+      "max_us": 299.0,
+      "cpu_seconds": 0.0,
+      "ac_calls_per_sample": 8.567,
+      "calls": {
+        "setText": 3225,
+        "setVisible": 8025,
+        "setPosition": 6400,
+        "setFontColor": 3200,
+        "setSize": 4825,
+        "setBackgroundOpacity": 25
+      },
+      "snapshot_bytes": 5886
+    },
+    {
+      "users": 64,
+      "scenario": "unchanged_snapshot",
+      "samples": 3000,
+      "mean_us": 71.389,
+      "p95_us": 96.8,
+      "p99_us": 288.3,
+      "max_us": 587.1,
+      "cpu_seconds": 0.2031,
+      "ac_calls_per_sample": 8.567,
+      "calls": {
+        "setText": 3225,
+        "setVisible": 8025,
+        "setPosition": 6400,
+        "setFontColor": 3200,
+        "setSize": 4825,
+        "setBackgroundOpacity": 25
+      },
+      "snapshot_bytes": 5886
+    },
+    {
+      "users": 64,
+      "scenario": "speaking_transition",
+      "samples": 3000,
+      "mean_us": 272.459,
+      "p95_us": 310.8,
+      "p99_us": 409.7,
+      "max_us": 1053.0,
+      "cpu_seconds": 0.7656,
+      "ac_calls_per_sample": 1032.656,
+      "calls": {
+        "setText": 386871,
+        "setVisible": 962679,
+        "setPosition": 767744,
+        "setCustomFont": 2999,
+        "setFontSize": 2999,
+        "setFontColor": 383872,
+        "setSize": 578807,
+        "setBackgroundOpacity": 2999,
+        "setBackgroundTexture": 8997
+      },
+      "snapshot_bytes": 5886
+    },
+    {
+      "users": 64,
+      "scenario": "burst_32",
+      "samples": 3000,
+      "mean_us": 343.24,
+      "p95_us": 386.6,
+      "p99_us": 512.9,
+      "max_us": 1313.1,
+      "cpu_seconds": 1.0,
+      "ac_calls_per_sample": 1028.002,
+      "calls": {
+        "setText": 387000,
+        "setVisible": 963000,
+        "setPosition": 768000,
+        "setCustomFont": 1,
+        "setFontSize": 1,
+        "setFontColor": 384000,
+        "setSize": 579000,
+        "setBackgroundOpacity": 3000,
+        "setBackgroundTexture": 3
+      },
+      "snapshot_bytes": 5886
+    },
+    {
+      "users": 64,
+      "scenario": "draw_submission",
+      "samples": 3000,
+      "mean_us": 8.899,
+      "p95_us": 9.0,
+      "p99_us": 13.1,
+      "max_us": 68.2,
+      "cpu_seconds": 0.0312,
+      "ac_calls_per_sample": 65.0,
+      "calls": {
+        "glColor4f": 3000,
+        "glQuadTextured": 192000
+      },
+      "snapshot_bytes": 5886
+    }
+  ]
+}

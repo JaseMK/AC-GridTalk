@@ -1,0 +1,9 @@
+{
+  "v": 2,
+  "source": "discord",
+  "event": "talk",
+  "server": "guild-123",
+  "channel": "voice-7",
+  "client_id": 1,
+  "talking": false
+}

@@ -1,0 +1,6 @@
+{
+  "v": 2,
+  "source": "discord",
+  "event": "bridge_status",
+  "message": "Voice roster query failed"
+}

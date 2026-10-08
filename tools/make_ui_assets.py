@@ -3,7 +3,7 @@ from pathlib import Path
 import math
 from PIL import Image, ImageDraw
 
-output = Path(__file__).resolve().parents[1] / "ac_app/TSVoice/assets"
+output = Path(__file__).resolve().parents[1] / "ac_app/GridTalk/assets"
 output.mkdir(parents=True, exist_ok=True)
 scale = 4
 for state, color in (("idle", (43, 45, 48, 140)), ("active", (53, 78, 59, 155))):

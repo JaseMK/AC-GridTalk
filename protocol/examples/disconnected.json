@@ -1,0 +1,10 @@
+{
+  "v": 2,
+  "source": "discord",
+  "event": "state",
+  "snapshot": 1001,
+  "page": 0,
+  "pages": 1,
+  "connected": false,
+  "clients": []
+}

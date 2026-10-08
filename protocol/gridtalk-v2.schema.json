@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gridtalk:packet:2",
+  "title": "GridTalk UDP packet protocol v2",
+  "description": "One UTF-8 JSON object per UDP datagram to 127.0.0.1:9999. Includes the legacy v1 reset emitted by the TS3 sender. See docs/SENDER_PROTOCOL.md for cross-packet constraints and lifecycle.",
+  "$defs": {
+    "client": {
+      "type": "object",
+      "required": [
+        "client_id",
+        "name",
+        "talking",
+        "self"
+      ],
+      "properties": {
+        "client_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Stable positive member ID within this source and channel. Map larger provider IDs to local integers."
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name; UTF-8, including Unicode and escaped JSON characters."
+        },
+        "talking": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "True means transmitting. Null means unknown: retain previous state in the same channel or default to false."
+        },
+        "self": {
+          "type": "boolean",
+          "description": "The local voice-app user; adds (you) to the displayed name."
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "oneOf": [
+    {
+      "title": "Roster snapshot page",
+      "type": "object",
+      "required": [
+        "v",
+        "event",
+        "snapshot",
+        "page",
+        "pages",
+        "connected",
+        "clients"
+      ],
+      "properties": {
+        "v": {
+          "const": 2,
+          "description": "Wire protocol version; independent of the application version."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it."
+        },
+        "event": {
+          "const": "state"
+        },
+        "snapshot": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Strictly increasing complete-snapshot sequence per source. All pages of a snapshot use the same value."
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8191,
+          "description": "Zero-based page index; must be less than pages (semantic constraint)."
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "connected": {
+          "type": "boolean"
+        },
+        "server": {
+          "type": "string",
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+        },
+        "channel": {
+          "type": "string",
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+        },
+        "channel_name": {
+          "type": "string"
+        },
+        "clients": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/client"
+          }
+        }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "connected": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "server",
+              "channel"
+            ]
+          },
+          "else": {
+            "properties": {
+              "page": {
+                "const": 0
+              },
+              "pages": {
+                "const": 1
+              },
+              "clients": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "Speaking transition",
+      "type": "object",
+      "required": [
+        "v",
+        "event",
+        "server",
+        "channel",
+        "client_id",
+        "talking"
+      ],
+      "properties": {
+        "v": {
+          "const": 2,
+          "description": "Wire protocol version; independent of the application version."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it."
+        },
+        "event": {
+          "const": "talk"
+        },
+        "server": {
+          "type": "string",
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+        },
+        "channel": {
+          "type": "string",
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+        },
+        "client_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Stable positive member ID within this source and channel. Map larger provider IDs to local integers."
+        },
+        "talking": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string",
+          "description": "Informational only; roster names are updated by snapshots."
+        },
+        "self": {
+          "type": "boolean",
+          "description": "Informational only; roster self flags are updated by snapshots."
+        },
+        "whisper": {
+          "type": "boolean",
+          "description": "Informational only; activity is still limited to roster members in this channel."
+        }
+      },
+      "additionalProperties": true
+    },
+    {
+      "title": "Clear source state",
+      "type": "object",
+      "required": [
+        "v",
+        "event"
+      ],
+      "properties": {
+        "v": {
+          "const": 2,
+          "description": "Wire protocol version; independent of the application version."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it."
+        },
+        "event": {
+          "const": "reset"
+        },
+        "server": {
+          "type": "string",
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+        }
+      },
+      "additionalProperties": true
+    },
+    {
+      "title": "Sender diagnostic",
+      "type": "object",
+      "required": [
+        "v",
+        "event",
+        "message"
+      ],
+      "properties": {
+        "v": {
+          "const": 2,
+          "description": "Wire protocol version; independent of the application version."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it."
+        },
+        "event": {
+          "const": "bridge_status"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    {
+      "title": "Legacy reset accepted for compatibility",
+      "type": "object",
+      "required": [
+        "v",
+        "event"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Stable sender stream identity, e.g. teamspeak or discord. Missing source maps to default for backward compatibility. New senders should always supply it."
+        },
+        "event": {
+          "const": "reset"
+        },
+        "server": {
+          "type": "string",
+          "description": "Opaque provider identifier. Encode numeric provider IDs as strings to preserve precision."
+        }
+      },
+      "additionalProperties": true
+    }
+  ]
+}

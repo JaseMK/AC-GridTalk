@@ -11,7 +11,7 @@
 #define EXPORT __declspec(dllexport)
 #define STRINGIFY_INNER(value) #value
 #define STRINGIFY(value) STRINGIFY_INNER(value)
-#define STRINGIFY_PORT STRINGIFY(TS_AC_UDP_PORT)
+#define STRINGIFY_PORT STRINGIFY(GRIDTALK_UDP_PORT)
 static struct TS3Functions api;
 static SOCKET udp = INVALID_SOCKET;
 static struct sockaddr_in destination;
@@ -26,14 +26,14 @@ static VOID CALLBACK snapshot_timer(HWND window, UINT message, UINT_PTR timer, D
     send_snapshot();
 }
 static void log_message(const char* text, enum LogLevel level) {
-    if (api.logMessage) api.logMessage(text, level, "AC Speaking UDP", 0);
+    if (api.logMessage) api.logMessage(text, level, "Assetto Corsa Notifier", 0);
 }
 
-EXPORT const char* ts3plugin_name(void) { return "AC Speaking UDP"; }
+EXPORT const char* ts3plugin_name(void) { return "Assetto Corsa Notifier"; }
 EXPORT const char* ts3plugin_version(void) { return "0.3.0"; }
 EXPORT int ts3plugin_apiVersion(void) { return 26; }
-EXPORT const char* ts3plugin_author(void) { return "TS-AC-plugin"; }
-EXPORT const char* ts3plugin_description(void) { return "Sends speaking events to localhost over UDP."; }
+EXPORT const char* ts3plugin_author(void) { return "GridTalk"; }
+EXPORT const char* ts3plugin_description(void) { return "Sends your TeamSpeak channel roster and live speaking status to GridTalk over local UDP (127.0.0.1:" STRINGIFY_PORT "). Enable this addon, then enable GridTalk in Assetto Corsa."; }
 EXPORT void ts3plugin_setFunctionPointers(const struct TS3Functions funcs) { api = funcs; }
 
 static void send_packet(const char* packet) {
@@ -58,7 +58,7 @@ EXPORT int ts3plugin_init(void) {
         return 1;
     }
     destination.sin_family = AF_INET;
-    destination.sin_port = htons(TS_AC_UDP_PORT);
+    destination.sin_port = htons(GRIDTALK_UDP_PORT);
     destination.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     reported_send_error = 0;
     reported_snapshot = 0;
@@ -70,14 +70,14 @@ EXPORT int ts3plugin_init(void) {
         closesocket(udp); udp = INVALID_SOCKET; WSACleanup(); return 1;
     }
     log_message("v0.3.0 started: speaking events + 1-second channel snapshots to 127.0.0.1:" STRINGIFY_PORT, LogLevel_INFO);
-    send_packet("{\"v\":1,\"event\":\"reset\"}");
+    send_packet("{\"v\":1,\"source\":\"teamspeak\",\"event\":\"reset\"}");
     send_snapshot();
     return 0;
 }
 
 EXPORT void ts3plugin_shutdown(void) {
     if (timer_id) { KillTimer(NULL, timer_id); timer_id = 0; }
-    send_packet("{\"v\":1,\"event\":\"reset\"}");
+    send_packet("{\"v\":1,\"source\":\"teamspeak\",\"event\":\"reset\"}");
     if (udp != INVALID_SOCKET) {
         closesocket(udp);
         udp = INVALID_SOCKET;
@@ -103,12 +103,12 @@ static void send_snapshot(void) {
     server = api.getCurrentServerConnectionHandlerID();
     if (!server || api.getClientID(server, &self) != ERROR_ok ||
         api.getChannelOfClient(server, self, &channel) != ERROR_ok) {
-        snprintf(packet, sizeof(packet), "{\"v\":2,\"event\":\"state\",\"snapshot\":%llu,\"page\":0,\"pages\":1,\"connected\":false,\"clients\":[]}", id);
+        snprintf(packet, sizeof(packet), "{\"v\":2,\"source\":\"teamspeak\",\"event\":\"state\",\"snapshot\":%llu,\"page\":0,\"pages\":1,\"connected\":false,\"clients\":[]}", id);
         send_packet(packet);
         return;
     }
     if (api.getChannelClientList(server, channel, &clients) != ERROR_ok) {
-        send_packet("{\"v\":2,\"event\":\"bridge_status\",\"message\":\"Channel roster query failed\"}");
+        send_packet("{\"v\":2,\"source\":\"teamspeak\",\"event\":\"bridge_status\",\"message\":\"Channel roster query failed\"}");
         return;
     }
     if (api.getChannelVariableAsString(server, channel, CHANNEL_NAME, &sdk_name) == ERROR_ok && sdk_name) {
@@ -127,7 +127,7 @@ static void send_snapshot(void) {
     for (page = 0; page < pages; ++page) {
         size_t index, used;
         used = (size_t)snprintf(packet, sizeof(packet),
-            "{\"v\":2,\"event\":\"state\",\"snapshot\":%llu,\"page\":%u,\"pages\":%u,\"connected\":true,\"server\":\"%llu\",\"channel\":\"%llu\",\"channel_name\":\"%s\",\"clients\":[",
+            "{\"v\":2,\"source\":\"teamspeak\",\"event\":\"state\",\"snapshot\":%llu,\"page\":%u,\"pages\":%u,\"connected\":true,\"server\":\"%llu\",\"channel\":\"%llu\",\"channel_name\":\"%s\",\"clients\":[",
             id, (unsigned)page, (unsigned)pages, (unsigned long long)server, (unsigned long long)channel, escaped_channel);
         for (index = page * 8; index < count && index < (page + 1) * 8; ++index) {
             char escaped[3073];
@@ -182,7 +182,7 @@ EXPORT void ts3plugin_onTalkStatusChangeEvent(uint64 server, int status, int whi
         api.getChannelOfClient(server, client, &client_channel) != ERROR_ok || channel != client_channel)) return;
     get_name(server, client, escaped);
     snprintf(packet, sizeof(packet),
-        "{\"v\":2,\"event\":\"talk\",\"server\":\"%llu\",\"channel\":\"%llu\",\"client_id\":%u,\"name\":\"%s\",\"talking\":%s,\"whisper\":%s,\"self\":%s}",
+        "{\"v\":2,\"source\":\"teamspeak\",\"event\":\"talk\",\"server\":\"%llu\",\"channel\":\"%llu\",\"client_id\":%u,\"name\":\"%s\",\"talking\":%s,\"whisper\":%s,\"self\":%s}",
         (unsigned long long)server, (unsigned long long)channel, (unsigned int)client, escaped,
         status == STATUS_TALKING ? "true" : "false", whisper ? "true" : "false", is_self ? "true" : "false");
     send_packet(packet);
@@ -206,7 +206,7 @@ EXPORT void ts3plugin_onConnectStatusChangeEvent(uint64 server, int status, unsi
     (void)error;
     if (status == STATUS_CONNECTION_ESTABLISHED) { send_snapshot(); return; }
     if (status != STATUS_DISCONNECTED) return;
-    snprintf(packet, sizeof(packet), "{\"v\":1,\"event\":\"reset\",\"server\":\"%llu\"}", (unsigned long long)server);
+    snprintf(packet, sizeof(packet), "{\"v\":1,\"source\":\"teamspeak\",\"event\":\"reset\",\"server\":\"%llu\"}", (unsigned long long)server);
     send_packet(packet);
     send_snapshot();
 }
