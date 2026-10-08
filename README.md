@@ -32,7 +32,7 @@ installation found on this machine. Override with `-AssettoCorsaPath` if needed.
 For manual installation, replace BOTH files:
 
 - `build/Release/assetto_corsa_notifier.dll` -> `%APPDATA%/TS3Client/plugins/assetto_corsa_notifier.dll`
-- Copy the entire `ac_app/GridTalk` folder, including `assets`, into `<AC>/apps/python`.
+- Copy the entire `ac_app/GridTalk` folder, including `assets` and `lib`, into `<AC>/apps/python`.
 
 Restart TeamSpeak and enable **Assetto Corsa Notifier** under Tools > Options > Addons.
 Check that its version is **0.4.1**. Enable GridTalk in AC's Python app settings

@@ -3,6 +3,14 @@ import errno
 import json
 import math
 import re
+import os
+import sys
+# AC ships Python 3.3 but omits its socket extension from the default path.
+# Resolve our own copy before importing socket, independent of other apps.
+_library = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib',
+                        'x64' if sys.maxsize > 2 ** 32 else 'x86')
+if _library not in sys.path:
+    sys.path.insert(0, _library)
 import socket
 import time
 import ac
@@ -72,7 +80,8 @@ def acMain(ac_version):
     _pill_states.clear()
     candidate = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        candidate.bind(("127.0.0.1", PORT))
+        # Numeric bytes avoid loading IDNA/unicodedata for a loopback-only address.
+        candidate.bind((b"127.0.0.1", PORT))
         candidate.setblocking(False)
         _socket = candidate
         ac.log("GridTalk 0.4.1 listening on 127.0.0.1:" + str(PORT))

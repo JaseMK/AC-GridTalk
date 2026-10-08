@@ -31,6 +31,7 @@ def load_app(source):
         setattr(ac, name, stub(name))
     sys.modules["ac"] = ac
     app = types.ModuleType("GridTalkBench")
+    app.__file__ = str(ROOT / 'ac_app/GridTalk/GridTalk.py')
     exec(compile(source, "GridTalk.py", "exec"), app.__dict__)
     clock = [100.0]
     app.time = types.SimpleNamespace(monotonic=lambda: clock[0])

@@ -2,6 +2,9 @@
 
 ## 0.4.1 — 2026-10-08
 
+- Fix standalone AC startup by bundling Python 3.3 socket extensions for both
+  architectures; avoid the IDNA dependency for numeric loopback binding. Add an
+  import/startup/update check using AC's actual embedded Python 3.3.5 runtime.
 - Validate packets before source admission or freshness mutation; enforce IDs,
   page consistency, unique members, text/nesting/storage limits, and safe integers.
 - Separate bridge activity from voice freshness; bound unknown query retention

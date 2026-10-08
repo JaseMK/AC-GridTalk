@@ -20,7 +20,7 @@ function Invoke-GridTalkInstall {
     $PluginDirectory = [IO.Path]::GetFullPath($PluginDirectory)
     $pluginSource = Join-Path $SourceRoot 'build\Release\assetto_corsa_notifier.dll'
     $appSource = Join-Path $SourceRoot 'ac_app\GridTalk'
-    $requiredFiles = @('GridTalk.py') + @('red','green','idle_left','idle_middle','idle_right','active_left','active_middle','active_right' | ForEach-Object { "assets\$_.png" })
+    $requiredFiles = @('GridTalk.py','lib\x64\_socket.pyd','lib\x86\_socket.pyd','lib\PYTHON-LICENSE.txt','lib\README.md') + @('red','green','idle_left','idle_middle','idle_right','active_left','active_middle','active_right' | ForEach-Object { "assets\$_.png" })
     foreach ($required in @($pluginSource) + @($requiredFiles | ForEach-Object { Join-Path $appSource $_ })) {
         if (!(Test-Path -LiteralPath $required -PathType Leaf)) { throw "Required installation file missing: $required" }
     }
@@ -64,6 +64,7 @@ function Invoke-GridTalkInstall {
     try {
         New-Item -ItemType Directory -Path (Join-Path $stage 'assets') -Force | Out-Null
         foreach ($relative in $requiredFiles) {
+            New-Item -ItemType Directory -Path (Split-Path (Join-Path $stage $relative) -Parent) -Force | Out-Null
             Copy-Item -LiteralPath (Join-Path $appSource $relative) -Destination (Join-Path $stage $relative)
         }
         Copy-Item -LiteralPath $pluginSource -Destination $dllStage
