@@ -34,8 +34,8 @@ jobs:
       - name: Install development dependencies
         run: python -m pip install -r requirements-dev.txt
 
-      # The AC Python 3.3 runtime needs a local game install, and the installer
-      # test is kept local; everything else runs against the port-19999 build.
+      # The AC Python 3.3 runtime needs a local game install; everything else
+      # runs against the port-19999 build.
       - name: Build (port 19999) and run tests
         shell: pwsh
-        run: ./tests/run_all.ps1 -SkipAcRuntime -SkipInstaller
+        run: ./tests/run_all.ps1 -SkipAcRuntime

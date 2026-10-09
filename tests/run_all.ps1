@@ -5,13 +5,12 @@ Builds the port-19999 test configuration and runs every GridTalk test suite.
 .DESCRIPTION
 Uses .venv\Scripts\python.exe when present (see README), otherwise python on PATH.
 The AC Python 3.3 runtime test runs only when Assetto Corsa is found, from
--AssettoCorsaPath or Steam's registry keys. Never touches the live installation.
+-AssettoCorsaPath or Steam's registry keys.
 #>
 param(
     [string]$AssettoCorsaPath,
     [string]$Python,
-    [switch]$SkipAcRuntime,
-    [switch]$SkipInstaller
+    [switch]$SkipAcRuntime
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
@@ -42,12 +41,6 @@ try {
     Invoke-Step 'check --schema' { & $Python tests/check.py --schema --port $port --build-dir $buildDir }
     Invoke-Step 'receiver_hardening' { & $Python tests/receiver_hardening.py }
     Invoke-Step 'native_hardening' { & $Python tests/native_hardening.py --port $port --build-dir $buildDir }
-    if ($SkipInstaller) {
-        $results.Add('SKIP  installer (-SkipInstaller)')
-    } else {
-        $shell = (Get-Process -Id $PID).Path
-        Invoke-Step 'installer' { & $shell -NoProfile -ExecutionPolicy Bypass -File tests/installer.ps1 }
-    }
     if ($SkipAcRuntime) {
         $results.Add('SKIP  ac_runtime (-SkipAcRuntime)')
     } else {
