@@ -99,11 +99,34 @@ app requires no JSON Schema library or third-party Python packages.
 
 ## Build and test
 
-Requires CMake, Visual Studio C++ tools, Python, and the official TeamSpeak SDK:
+Requires CMake, Visual Studio C++ tools, Python 3.10+, and the official TeamSpeak SDK.
+Test-only Python dependencies are pinned in `requirements-dev.txt`; install them
+into a local virtual environment (ignored by Git):
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+```
+
+Fetch the SDK, then run every suite with one command:
 
 ```powershell
 git clone https://github.com/teamspeak/ts3client-pluginsdk.git sdk
 git -C sdk checkout 4aa90a53aa150cbf81e13bc97e68c0431b26499f
+powershell -ExecutionPolicy Bypass -File tests\run_all.ps1
+```
+
+`tests/run_all.ps1` uses `.venv` when present, builds `build-tests` (port 19999,
+so it can run while AC listens on 9999), and runs the schema, native, receiver,
+hardening, and installer tests. When Assetto Corsa is found (`-AssettoCorsaPath`,
+or Steam's registry), it also runs `tests/ac_runtime.py` inside AC's embedded
+Python 3.3: a snapshot, talk, stale and recovery render flow plus a deep-JSON
+packet. `-SkipInstaller` and `-SkipAcRuntime` omit those steps; GitHub Actions
+(`.github/workflows/tests.yml`) runs everything else on `windows-latest`.
+
+To build and run the production-port suite manually:
+
+```powershell
 cmake -S . -B build -A x64 -DGRIDTALK_BUILD_TESTS=ON
 cmake --build build --config Release
 python tests/check.py
@@ -141,9 +164,9 @@ Hardening regression checks (native test build uses port 19999):
 ```powershell
 python tests/receiver_hardening.py
 python tests/native_hardening.py
-./tests/installer.ps1
+powershell -ExecutionPolicy Bypass -File tests\installer.ps1
 ```
 
-The native/schema checks use the development-only validator described in the
-sender guide. Installer failure tests use isolated fake installations under
-`build/`; the live game installation is not modified by those tests.
+The native/schema checks need the pinned `jsonschema` from `requirements-dev.txt`.
+Installer failure tests use isolated fake installations under `build/`; the live
+game installation is not modified by those tests.

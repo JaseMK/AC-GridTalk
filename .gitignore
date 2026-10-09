@@ -3,3 +3,4 @@
 /sdk/
 /backups/
 __pycache__/
+/.venv/

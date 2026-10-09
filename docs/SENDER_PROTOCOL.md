@@ -209,7 +209,7 @@ udp.close()
 Install the development validator and check the schema/examples:
 
 ```powershell
-python -m pip install --target build/schema-deps jsonschema==4.26.0
+python -m pip install -r requirements-dev.txt  # inside the venv described in the README
 python tests/check_schema.py
 python tests/check.py --port 19999 --build-dir build-tests --schema
 ```

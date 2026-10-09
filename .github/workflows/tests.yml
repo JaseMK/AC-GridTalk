@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      # Pinned TeamSpeak plugin SDK revision; keep in sync with README "Build and test".
+      TS_SDK_COMMIT: 4aa90a53aa150cbf81e13bc97e68c0431b26499f
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Fetch pinned TeamSpeak SDK
+        shell: pwsh
+        run: |
+          git init sdk
+          git -C sdk remote add origin https://github.com/teamspeak/ts3client-pluginsdk.git
+          git -C sdk fetch --depth 1 origin $env:TS_SDK_COMMIT
+          git -C sdk checkout --detach FETCH_HEAD
+
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      # The AC Python 3.3 runtime needs a local game install, and the installer
+      # test is kept local; everything else runs against the port-19999 build.
+      - name: Build (port 19999) and run tests
+        shell: pwsh
+        run: ./tests/run_all.ps1 -SkipAcRuntime -SkipInstaller

@@ -66,12 +66,12 @@ unmeasured here. See [PERFORMANCE.md](PERFORMANCE.md) for A/B methodology.
 ```powershell
 cmake -S . -B build-tests -A x64 -DGRIDTALK_BUILD_TESTS=ON -DGRIDTALK_UDP_PORT=19999
 cmake --build build-tests --config Release
-python -m pip install --target build/schema-deps jsonschema==4.26.0
+python -m pip install -r requirements-dev.txt  # inside the venv described in the README
 python tests/check_schema.py
 python tests/check.py --port 19999 --build-dir build-tests --schema
 python tests/receiver_hardening.py
 python tests/native_hardening.py
-./tests/installer.ps1
+powershell -ExecutionPolicy Bypass -File tests/installer.ps1
 python tools/benchmark.py --output build/performance-hardened.json
 ```
 
