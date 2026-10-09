@@ -3,6 +3,7 @@
 ## 0.4.4 — 2026-10-09
 
 - Hide the Assetto Corsa logo from the GridTalk title bar.
+- GitHub release notes are taken from this changelog.
 - Release packaging now includes exactly the tracked app files and refuses to
   build if any are missing from the working tree.
 
@@ -26,6 +27,10 @@
 - Rewrite the README for users; remove internal review, hardening and
   performance reports (still in Git history).
 - Release under the MIT licence.
+- Add a one-command test runner (`tests/run_all.ps1`) with pinned development
+  dependencies, and run the tests on GitHub Actions for every push. The AC
+  Python 3.3 runtime test now drives a full snapshot, talk, timeout and redraw
+  cycle instead of only importing the app.
 
 ## 0.4.2 — 2026-10-08
 

@@ -51,4 +51,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME dist/* --draft --title "GridTalk $env:GITHUB_REF_NAME" --notes "See CHANGELOG.md for changes. Install instructions: README.md#install"
+          # Notes come from this version's CHANGELOG.md section (written by package.py).
+          gh release create $env:GITHUB_REF_NAME dist/* --draft --title "GridTalk $env:GITHUB_REF_NAME" --notes-file build/release-notes.md

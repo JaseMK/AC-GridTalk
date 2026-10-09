@@ -7,6 +7,8 @@
 Writes to dist/:
   AssettoCorsaNotifier-<version>.ts3_plugin  TeamSpeak installs it on double-click
   GridTalk-<version>.zip                     extract into the Assetto Corsa folder
+and the GitHub release notes (this version's CHANGELOG.md section) to
+build/release-notes.md.
 """
 import argparse
 import re
@@ -28,6 +30,16 @@ def version():
     if cmake != app:
         raise SystemExit('Version mismatch: CMakeLists.txt {} vs GridTalk.py {}'.format(cmake, app))
     return cmake
+
+
+def release_notes(release):
+    changelog = (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
+    section = re.search(r'^## ' + re.escape(release) + r' .*?\n(.*?)(?=^## |\Z)',
+                        changelog, re.MULTILINE | re.DOTALL)
+    if not section or not section.group(1).strip():
+        raise SystemExit('CHANGELOG.md has no entry for {}; add one before releasing.'.format(release))
+    return (section.group(1).strip() + '\n\n**Install:** download both files below and follow the '
+            '[README](https://github.com/JaseMK/AC-GridTalk#install).\n')
 
 
 def check_dll(path, release):
@@ -62,8 +74,14 @@ def main():
     parser.add_argument('--output', default='dist')
     args = parser.parse_args()
     release = version()
+    # Run every check before writing anything.
+    notes = release_notes(release)
+    files = app_files()
     dll = ROOT / args.build_dir / 'Release' / 'assetto_corsa_notifier.dll'
     check_dll(dll, release)
+    notes_path = ROOT / 'build' / 'release-notes.md'
+    notes_path.parent.mkdir(exist_ok=True)
+    notes_path.write_text(notes, encoding='utf-8')
     output = ROOT / args.output
     output.mkdir(exist_ok=True)
 
@@ -82,7 +100,7 @@ def main():
 
     app = output / 'GridTalk-{}.zip'.format(release)
     with zipfile.ZipFile(str(app), 'w', zipfile.ZIP_DEFLATED) as archive:
-        for path in app_files():
+        for path in files:
             archive.write(str(path), 'apps/python/GridTalk/' + path.relative_to(APP).as_posix())
 
     for path in (plugin, app):
