@@ -35,7 +35,7 @@ try:
     for name in ('newApp', 'addLabel', 'newTexture'):
         setattr(ac, name, control)
     for name in ('initFont', 'setSize', 'drawBorder', 'setBackgroundColor', 'setBackgroundOpacity',
-                 'addRenderCallback', 'setPosition', 'setFontSize', 'setFontColor',
+                 'addRenderCallback', 'setPosition', 'setIconPosition', 'setFontSize', 'setFontColor',
                  'setBackgroundTexture', 'glColor4f'):
         setattr(ac, name, lambda *args: None)
     ac.log = logs.append

@@ -182,6 +182,7 @@ def check_startup_and_errors():
     app, clock, calls = benchmark.load_app(SOURCE)
     blocker = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
+        assert calls['setIconPosition'] == 1  # AC logo hidden from the title bar
         library = str(ROOT / 'ac_app/GridTalk/lib')
         assert not any(path.startswith(library) for path in sys.path)  # bundled _socket path removed
         # Legacy v1 talk packets are rejected outright; only the v1 reset remains.

@@ -57,7 +57,7 @@ def control(*args):
 control.count = 0
 for name in ("newApp", "addLabel", "addButton", "newTexture"):
     setattr(ac, name, control)
-for name in ("setPosition", "setFontSize", "initFont", "setCustomFont", "setBackgroundTexture", "addOnClickedListener", "drawBorder", "setBackgroundOpacity", "setBackgroundColor", "addRenderCallback", "glQuadTextured", "glColor4f"):
+for name in ("setPosition", "setFontSize", "initFont", "setCustomFont", "setBackgroundTexture", "addOnClickedListener", "drawBorder", "setIconPosition", "setBackgroundOpacity", "setBackgroundColor", "addRenderCallback", "glQuadTextured", "glColor4f"):
     setattr(ac, name, lambda *args: None)
 ac.log = logs.append
 ac.setText = lambda label, text: labels.update({label: text})

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Hide the Assetto Corsa logo from the GridTalk title bar.
+
 ## 0.4.3 — unreleased
 
 - Report the real version: the DLL takes it from the CMake project version and

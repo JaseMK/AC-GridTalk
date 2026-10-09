@@ -25,7 +25,7 @@ def load_app(source):
             return sum(calls.values()) if name in ("newApp", "addLabel", "newTexture") else None
         return invoke
     for name in ("newApp", "addLabel", "newTexture", "initFont", "setSize", "drawBorder",
-                 "setBackgroundColor", "setBackgroundOpacity", "addRenderCallback", "setPosition",
+                 "setBackgroundColor", "setBackgroundOpacity", "addRenderCallback", "setPosition", "setIconPosition",
                  "setFontSize", "setText", "setVisible", "setCustomFont", "setFontColor",
                  "setBackgroundTexture", "glColor4f", "glQuadTextured", "log"):
         setattr(ac, name, stub(name))

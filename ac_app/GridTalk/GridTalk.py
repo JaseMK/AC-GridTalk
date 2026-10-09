@@ -77,6 +77,8 @@ def acMain(ac_version):
     ac.initFont(0, "Arial", 0, 1)
     ac.setSize(_app, 220, 58)
     ac.drawBorder(_app, 0)
+    # Move AC's logo off-window; the title bar still appears on hover for dragging.
+    ac.setIconPosition(_app, 0, -10000)
     ac.setBackgroundColor(_app, 0.22, 0.22, 0.22)
     ac.setBackgroundOpacity(_app, 0.40)
     for name in ("red", "green"):
