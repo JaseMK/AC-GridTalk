@@ -21,7 +21,7 @@ finally:
 import time
 import ac
 
-VERSION = '0.4.3'
+VERSION = '0.4.4'
 PORT = 9999
 BIND_RETRY_SECONDS = 3.0
 ERROR_LOG_SECONDS = 10.0

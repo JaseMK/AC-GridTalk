@@ -1,6 +1,6 @@
 name: release
 
-# Push a version tag (git tag v0.4.3 && git push origin v0.4.3) to build the
+# Push a version tag (git tag vX.Y.Z && git push origin vX.Y.Z) to build the
 # production DLL and publish the two downloads as a draft GitHub release.
 on:
   push:

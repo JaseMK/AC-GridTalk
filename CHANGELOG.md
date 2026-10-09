@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.4 — 2026-10-09
 
 - Hide the Assetto Corsa logo from the GridTalk title bar.
+- Release packaging now includes exactly the tracked app files and refuses to
+  build if any are missing from the working tree.
 
-## 0.4.3 — unreleased
+## 0.4.3 — 2026-10-09
 
 - Report the real version: the DLL takes it from the CMake project version and
   the AC app from one `VERSION` constant. v0.4.2 still identified itself as 0.4.1.

@@ -127,7 +127,7 @@ Actions runs the same suite on every push.
 
 1. Update the version in `CMakeLists.txt` and `ac_app/GridTalk/GridTalk.py`,
    and add a `CHANGELOG.md` entry.
-2. Commit, then tag and push: `git tag v0.4.3` and `git push origin main v0.4.3`.
+2. Commit, then tag and push: `git tag vX.Y.Z` and `git push origin main vX.Y.Z`.
 3. The release workflow builds the DLL, runs `tools/package.py`, and creates a
    **draft** GitHub release with both downloads attached. Review it on GitHub
    and click *Publish*.

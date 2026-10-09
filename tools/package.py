@@ -11,6 +11,7 @@ Writes to dist/:
 import argparse
 import re
 import struct
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -44,9 +45,15 @@ def check_dll(path, release):
 
 
 def app_files():
-    for path in sorted(APP.rglob('*')):
-        if path.is_file() and '__pycache__' not in path.parts:
-            yield path
+    # Package exactly the tracked app files, so a missing texture or socket
+    # module fails the build instead of shipping a broken zip.
+    listed = subprocess.run(['git', 'ls-files', '-z', '--', str(APP)], cwd=str(ROOT), check=True,
+                            stdout=subprocess.PIPE).stdout.decode('utf-8').split(chr(0))
+    paths = [ROOT / name for name in sorted(filter(None, listed))]
+    missing = [str(path.relative_to(ROOT)) for path in paths if not path.is_file()]
+    if missing or not paths:
+        raise SystemExit('App files missing from the working tree (git restore them): ' + ', '.join(missing))
+    return paths
 
 
 def main():
