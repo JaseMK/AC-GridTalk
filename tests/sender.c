@@ -14,6 +14,9 @@ PLUGIN_FUNCTION(ts3plugin_onTalkStatusChangeEvent, void, (uint64, int, int, anyI
 PLUGIN_FUNCTION(ts3plugin_currentServerConnectionChanged, void, (uint64));
 PLUGIN_FUNCTION(ts3plugin_onClientSelfVariableUpdateEvent, void, (uint64, int, const char*, const char*));
 PLUGIN_FUNCTION(ts3plugin_onClientMoveEvent, void, (uint64, anyID, uint64, uint64, int, const char*));
+PLUGIN_FUNCTION(ts3plugin_onClientMoveMovedEvent, void, (uint64, anyID, uint64, uint64, int, anyID, const char*, const char*, const char*));
+PLUGIN_FUNCTION(ts3plugin_onClientMoveTimeoutEvent, void, (uint64, anyID, uint64, uint64, int, const char*));
+PLUGIN_FUNCTION(ts3plugin_onUpdateClientEvent, void, (uint64, anyID, anyID, const char*, const char*));
 #else
 void ts3plugin_setFunctionPointers(struct TS3Functions funcs);
 int ts3plugin_init(void);
@@ -22,6 +25,9 @@ void ts3plugin_onTalkStatusChangeEvent(uint64 server, int status, int whisper, a
 void ts3plugin_currentServerConnectionChanged(uint64 server);
 void ts3plugin_onClientSelfVariableUpdateEvent(uint64 server, int flag, const char* old_value, const char* new_value);
 void ts3plugin_onClientMoveEvent(uint64 server, anyID client, uint64 old_channel, uint64 new_channel, int visibility, const char* message);
+void ts3plugin_onClientMoveMovedEvent(uint64 server, anyID client, uint64 old_channel, uint64 new_channel, int visibility, anyID mover, const char* mover_name, const char* mover_uid, const char* message);
+void ts3plugin_onClientMoveTimeoutEvent(uint64 server, anyID client, uint64 old_channel, uint64 new_channel, int visibility, const char* message);
+void ts3plugin_onUpdateClientEvent(uint64 server, anyID client, anyID invoker, const char* invoker_name, const char* invoker_uid);
 #endif
 static uint64 current = 123;
 static int roster_size = 17;
@@ -103,6 +109,9 @@ int main(int argc, char** argv) {
     LOAD_FUNCTION(ts3plugin_currentServerConnectionChanged);
     LOAD_FUNCTION(ts3plugin_onClientSelfVariableUpdateEvent);
     LOAD_FUNCTION(ts3plugin_onClientMoveEvent);
+    LOAD_FUNCTION(ts3plugin_onClientMoveMovedEvent);
+    LOAD_FUNCTION(ts3plugin_onClientMoveTimeoutEvent);
+    LOAD_FUNCTION(ts3plugin_onUpdateClientEvent);
 #else
     int stress = argc > 1 && strcmp(argv[1], "--stress") == 0;
     if (argc > 1 && strcmp(argv[1], "--boundary") == 0) boundary_mode = 1;
@@ -140,6 +149,24 @@ int main(int argc, char** argv) {
                 ts3plugin_onClientMoveEvent(123, 43, 7, 8, 0, "");
             dispatch_pending();
             if (roster_queries != 2) return 5; /* relevant burst coalesced */
+            for (index = 0; index < 100; ++index) {
+                ts3plugin_onClientMoveMovedEvent(456, 43, 7, 8, 0, 44, "Admin", "uid", "");
+                ts3plugin_onClientMoveMovedEvent(123, 43, 8, 9, 0, 44, "Admin", "uid", "");
+                ts3plugin_onUpdateClientEvent(123, 59, 44, "Admin", "uid"); /* client 59 is in channel 8 */
+                ts3plugin_onUpdateClientEvent(456, 43, 44, "Admin", "uid");
+            }
+            dispatch_pending();
+            if (roster_queries != 2) return 12; /* unrelated moved-by-other/updates ignored */
+            for (index = 0; index < 100; ++index)
+                ts3plugin_onClientMoveMovedEvent(123, 43, 7, 8, 0, 44, "Admin", "uid", "");
+            dispatch_pending();
+            if (roster_queries != 3) return 13; /* moved-by-other in our channel coalesced */
+            for (index = 0; index < 100; ++index) {
+                ts3plugin_onClientMoveTimeoutEvent(123, 43, 7, 0, 0, "");
+                ts3plugin_onUpdateClientEvent(123, 43, 44, "Admin", "uid");
+            }
+            dispatch_pending();
+            if (roster_queries != 4) return 14; /* timeout/rename in our channel coalesced */
             InterlockedExchange(&worker_running, 1);
             worker = CreateThread(NULL, 0, talk_worker, NULL, 0, NULL);
             if (!worker) return 6;
@@ -168,7 +195,7 @@ int main(int argc, char** argv) {
         DispatchMessageW(&held_message); /* old timer message after the DLL is actually unloaded */
         dispatch_pending();
 #endif
-        puts("PASS: 25 native lifecycle cycles, threaded talk/shutdown, move filtering and coalescing");
+        puts("PASS: 25 native lifecycle cycles, threaded talk/shutdown, move/kick/rename filtering and coalescing");
         return 0;
     }
     if (ts3plugin_init()) return 1;

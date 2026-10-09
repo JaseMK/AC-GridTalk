@@ -3,6 +3,7 @@ import copy
 import importlib.util
 import json
 import socket
+import sys
 import types
 from pathlib import Path
 
@@ -177,7 +178,59 @@ def check_limits_and_network():
         app.acShutdown()
 
 
+def check_startup_and_errors():
+    app, clock, calls = benchmark.load_app(SOURCE)
+    blocker = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        library = str(ROOT / 'ac_app/GridTalk/lib')
+        assert not any(path.startswith(library) for path in sys.path)  # bundled _socket path removed
+        # Legacy v1 talk packets are rejected outright; only the v1 reset remains.
+        assert app._validate(dict(v=1, event='talk', server='1', channel='2', client_id=3, talking=True)) is None
+        assert app._validate(dict(v=1, source='teamspeak', event='reset')) is not None
+        app.acShutdown()
+        blocker.bind(('127.0.0.1', 0))
+        app.PORT = blocker.getsockname()[1]
+        texts = {}
+        app.ac.setText = lambda control, text: texts.update({control: text})
+        app.acMain('retry')
+        assert app._socket is None and 'retrying' in texts[app._status]
+        failures = calls['log']
+        clock[0] += 1.0
+        app.acUpdate(0.016)
+        assert app._socket is None and calls['log'] == failures  # no retry or log spam before 3 s
+        clock[0] += app.BIND_RETRY_SECONDS
+        app.acUpdate(0.016)
+        assert app._socket is None and calls['log'] == failures  # still occupied; failure logged once
+        blocker.close()
+        clock[0] += app.BIND_RETRY_SECONDS
+        app.acUpdate(0.016)
+        assert app._socket is not None and app._socket.getsockname()[1] == app.PORT
+        assert texts[app._status] == 'Waiting for voice sender'
+        # A persistent receive fault logs once per interval, not once per frame.
+        original_socket = app._socket
+        class BrokenSocket:
+            def recvfrom(self, size):
+                raise OSError(10054, 'connection reset')
+        app._socket = BrokenSocket()
+        try:
+            before = calls['log']
+            for _ in range(100):
+                clock[0] += 1 / 60
+                app.acUpdate(0.016)
+            assert calls['log'] == before + 1
+            clock[0] += app.ERROR_LOG_SECONDS
+            app.acUpdate(0.016)
+            assert calls['log'] == before + 2
+        finally:
+            app._socket = original_socket
+    finally:
+        blocker.close()
+        app.acShutdown()
+
+
 check_validation()
 check_freshness_and_slots()
 check_limits_and_network()
+check_startup_and_errors()
 print('PASS: strict admission, schema bounds, malformed UDP, freshness, source reclamation, and UI/resource limits')
+print('PASS: bundled socket path removed, legacy talk rejected, bind retry, and rate-limited UDP errors')

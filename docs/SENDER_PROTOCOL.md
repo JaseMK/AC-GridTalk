@@ -8,7 +8,7 @@ is not included.
 
 The machine-readable contract is [gridtalk-v2.schema.json](../protocol/gridtalk-v2.schema.json).
 It uses JSON Schema Draft 2020-12. [Example packets](../protocol/examples)
-cover every event. Application version 0.4.1 and wire version 2 are independent.
+cover every event. Application version 0.4.3 and wire version 2 are independent.
 
 ## Transport and limits
 
@@ -143,8 +143,7 @@ No other source is affected. A subsequent full snapshot re-establishes the list.
 
 The bundled TS3 sender currently emits `v:1` resets for historical compatibility.
 That exact legacy event is included in the schema. New senders should use v2.
-Legacy v1 talk packets produce an upgrade diagnostic and cannot establish a
-roster; they are not a supported format for new integrations.
+Any other v1 packet, including legacy v1 talk events, is rejected as invalid.
 
 ## `bridge_status`: report a query/integration error
 

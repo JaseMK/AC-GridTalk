@@ -1,6 +1,6 @@
 # GridTalk
 
-GridTalk is a local UDP voice-activity overlay for Assetto Corsa, version 0.4.1.
+GridTalk is a local UDP voice-activity overlay for Assetto Corsa, version 0.4.3.
 The provider-neutral Python app receives channel rosters and speaking events
 from voice-app senders on `127.0.0.1:9999`. Multiple sources can share the port;
 their rosters, user IDs, resets, and timeouts are handled independently.
@@ -22,9 +22,17 @@ Names are TeamSpeak display names, not automatically mapped to AC cars.
 
 ## Install or upgrade
 
-Close TeamSpeak and exit the AC driving session, then run `Install.ps1` from
-PowerShell. It backs up the old files into this project's `backups` directory
-and installs both the DLL and Python app. It moves the old `ts_ac_udp.dll` and
+Close TeamSpeak and exit the AC driving session, then run the installer from
+PowerShell in this folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Install.ps1
+```
+
+The bypass applies only to that one process; Windows blocks local scripts by
+default, so running `.\Install.ps1` directly usually fails. The installer backs
+up the old files into this project's `backups` directory and installs both the
+DLL and Python app. It moves the old `ts_ac_udp.dll` and
 `TSVoice` app into the backup folder to prevent duplicate installations.
 After upgrading, enable the newly named addon and app. Its default AC path matches the Steam
 installation found on this machine. Override with `-AssettoCorsaPath` if needed.
@@ -35,7 +43,7 @@ For manual installation, replace BOTH files:
 - Copy the entire `ac_app/GridTalk` folder, including `assets` and `lib`, into `<AC>/apps/python`.
 
 Restart TeamSpeak and enable **Assetto Corsa Notifier** under Tools > Options > Addons.
-Check that its version is **0.4.1**. Enable GridTalk in AC's Python app settings
+Check that its version is **0.4.3**. Enable GridTalk in AC's Python app settings
 and open it from the in-game apps bar. The DLL is x64; use the 64-bit TS client.
 
 ## Connection diagnosis
@@ -46,8 +54,8 @@ The app distinguishes these states:
 - The user list appears when connected, with no status line during normal use.
 - **Voice sender disconnected**: no fresh connected source has a usable channel.
 - **Voice connection lost**: no recognized packet for five seconds. Speaker highlights are cleared.
-- **Legacy sender - update to protocol v2**: an old event-only sender is installed.
-- **UDP port unavailable**: another receiver is using 9999.
+- **UDP port unavailable (retrying)**: another receiver is using 9999. GridTalk
+  retries every three seconds and connects once the port is free.
 
 With AC closed, `python tools/listen.py` prints live packets. Do not run it while
 AC is listening, because only one receiver may bind port 9999. TeamSpeak logs
@@ -68,8 +76,9 @@ and local PTT transitions also use `onClientSelfVariableUpdateEvent`. Failed
 state queries preserve the previous indicator instead of falsely clearing it.
 A one-second
 timer sends complete channel state, so an app started later receives the roster
-and speaking state without needing someone to start talking. Snapshots also
-repair missed UDP events and refresh joins, departures, moves, and name changes.
+and speaking state without needing someone to start talking. Joins, departures,
+moves (including by an admin), kicks, bans, timeouts and renames in your channel
+queue one coalesced immediate refresh; snapshots also repair missed UDP events.
 The timer uses an owned message window on TeamSpeak's plugin-init thread.
 Shutdown destroys that window and waits for admitted callbacks before closing UDP.
 There is no audio transmission or server polling.
@@ -79,8 +88,8 @@ busy frame handles at most 32 datagrams, with a 1 ms receive budget checked ever
 four packets. Packet, snapshot, text, and UI limits bound retained resources. State changes update the display promptly;
 the connection status refreshes at most once per second while idle. UDP does not
 guarantee delivery; lost snapshot pages are discarded and the next complete
-snapshot replaces them. Update latency for roster changes is normally up to one
-second; missed speaking events recover on the next snapshot. Only people in your
+snapshot replaces them. Roster changes normally appear immediately, and at most
+one second later if an event is missed; missed speaking events recover on the next snapshot. Only people in your
 current channel are displayed, including whispers from those people. Activity
 while the microphone is muted is ignored.
 

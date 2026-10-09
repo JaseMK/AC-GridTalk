@@ -13,6 +13,9 @@
 #define STRINGIFY_INNER(value) #value
 #define STRINGIFY(value) STRINGIFY_INNER(value)
 #define STRINGIFY_PORT STRINGIFY(GRIDTALK_UDP_PORT)
+#ifndef GRIDTALK_VERSION
+#error "GRIDTALK_VERSION must be defined by the build (CMake project version)"
+#endif
 static struct TS3Functions api;
 static SOCKET udp = INVALID_SOCKET;
 static struct sockaddr_in destination;
@@ -101,7 +104,7 @@ static void log_message(const char* text, enum LogLevel level) {
 }
 
 EXPORT const char* ts3plugin_name(void) { return "Assetto Corsa Notifier"; }
-EXPORT const char* ts3plugin_version(void) { return "0.4.1"; }
+EXPORT const char* ts3plugin_version(void) { return GRIDTALK_VERSION; }
 EXPORT int ts3plugin_apiVersion(void) { return 26; }
 EXPORT const char* ts3plugin_author(void) { return "GridTalk"; }
 EXPORT const char* ts3plugin_description(void) { return "Sends your TeamSpeak channel roster and live speaking status to GridTalk over local UDP (127.0.0.1:" STRINGIFY_PORT "). Enable this addon, then enable GridTalk in Assetto Corsa."; }
@@ -162,7 +165,7 @@ EXPORT int ts3plugin_init(void) {
     AcquireSRWLockExclusive(&lifecycle_lock);
     running = 1;
     ReleaseSRWLockExclusive(&lifecycle_lock);
-    log_message("v0.4.1 started: speaking events + 1-second channel snapshots to 127.0.0.1:" STRINGIFY_PORT, LogLevel_INFO);
+    log_message("v" GRIDTALK_VERSION " started: speaking events + 1-second channel snapshots to 127.0.0.1:" STRINGIFY_PORT, LogLevel_INFO);
     send_packet("{\"v\":1,\"source\":\"teamspeak\",\"event\":\"reset\"}");
     send_snapshot();
     return 0;
@@ -365,10 +368,12 @@ EXPORT void ts3plugin_onConnectStatusChangeEvent(uint64 server, int status, unsi
 EXPORT void ts3plugin_currentServerConnectionChanged(uint64 server) {
     (void)server; send_snapshot();
 }
-EXPORT void ts3plugin_onClientMoveEvent(uint64 server, anyID client, uint64 old_channel, uint64 new_channel, int visibility, const char* message) {
+/* Queue one coalesced roster snapshot on the owner thread when a client enters,
+   leaves, or changes within the current server tab's channel. Ignores unrelated
+   activity so busy servers cause no extra roster queries. */
+static void request_roster_refresh(uint64 server, anyID client, uint64 old_channel, uint64 new_channel) {
     anyID self = 0;
     uint64 current_channel = 0;
-    (void)visibility; (void)message;
     if (!begin_callback()) return;
     if (server == api.getCurrentServerConnectionHandlerID() && api.getClientID(server, &self) == ERROR_ok &&
             (client == self || (api.getChannelOfClient(server, self, &current_channel) == ERROR_ok &&
@@ -377,5 +382,49 @@ EXPORT void ts3plugin_onClientMoveEvent(uint64 server, anyID client, uint64 old_
                 !PostMessageW(timer_window, REFRESH_ROSTER, 0, 0))
             InterlockedExchange(&snapshot_requested, 0);
     }
+    end_callback();
+}
+
+EXPORT void ts3plugin_onClientMoveEvent(uint64 server, anyID client, uint64 old_channel, uint64 new_channel, int visibility, const char* message) {
+    (void)visibility; (void)message;
+    request_roster_refresh(server, client, old_channel, new_channel);
+}
+
+EXPORT void ts3plugin_onClientMoveMovedEvent(uint64 server, anyID client, uint64 old_channel, uint64 new_channel, int visibility,
+                                             anyID mover, const char* mover_name, const char* mover_uid, const char* message) {
+    (void)visibility; (void)mover; (void)mover_name; (void)mover_uid; (void)message;
+    request_roster_refresh(server, client, old_channel, new_channel);
+}
+
+EXPORT void ts3plugin_onClientMoveTimeoutEvent(uint64 server, anyID client, uint64 old_channel, uint64 new_channel, int visibility, const char* message) {
+    (void)visibility; (void)message;
+    request_roster_refresh(server, client, old_channel, new_channel);
+}
+
+EXPORT void ts3plugin_onClientKickFromChannelEvent(uint64 server, anyID client, uint64 old_channel, uint64 new_channel, int visibility,
+                                                   anyID kicker, const char* kicker_name, const char* kicker_uid, const char* message) {
+    (void)visibility; (void)kicker; (void)kicker_name; (void)kicker_uid; (void)message;
+    request_roster_refresh(server, client, old_channel, new_channel);
+}
+
+EXPORT void ts3plugin_onClientKickFromServerEvent(uint64 server, anyID client, uint64 old_channel, uint64 new_channel, int visibility,
+                                                  anyID kicker, const char* kicker_name, const char* kicker_uid, const char* message) {
+    (void)visibility; (void)kicker; (void)kicker_name; (void)kicker_uid; (void)message;
+    request_roster_refresh(server, client, old_channel, new_channel);
+}
+
+EXPORT void ts3plugin_onClientBanFromServerEvent(uint64 server, anyID client, uint64 old_channel, uint64 new_channel, int visibility,
+                                                 anyID kicker, const char* kicker_name, const char* kicker_uid, uint64 time, const char* message) {
+    (void)visibility; (void)kicker; (void)kicker_name; (void)kicker_uid; (void)time; (void)message;
+    request_roster_refresh(server, client, old_channel, new_channel);
+}
+
+/* Display-name and other client property changes; refresh only for our channel. */
+EXPORT void ts3plugin_onUpdateClientEvent(uint64 server, anyID client, anyID invoker, const char* invoker_name, const char* invoker_uid) {
+    uint64 client_channel = 0;
+    (void)invoker; (void)invoker_name; (void)invoker_uid;
+    if (!begin_callback()) return;
+    if (api.getChannelOfClient(server, client, &client_channel) == ERROR_ok)
+        request_roster_refresh(server, client, client_channel, client_channel);
     end_callback();
 }

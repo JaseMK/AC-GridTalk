@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.3 — unreleased
+
+- Report the real version: the DLL takes it from the CMake project version and
+  the AC app from one `VERSION` constant. v0.4.2 still identified itself as 0.4.1.
+- Refresh the roster immediately when someone in your channel is moved by
+  another user, times out, is kicked or banned, or is renamed. Uses the same
+  filtering and coalescing as ordinary moves; previously these waited up to 1 s.
+- Retry the UDP bind every three seconds when port 9999 is busy, instead of
+  staying unavailable until AC restarts.
+- Remove GridTalk's bundled `_socket` folder from AC's shared `sys.path` after
+  import, and rate-limit receive-error logging to once per 10 seconds.
+- Remove the unreachable legacy v1 talk diagnostic; v1 talk packets are rejected.
+  The v1 reset emitted by the TS3 sender is still accepted.
+- Document running the installer with a process-scoped execution-policy bypass.
+
 ## 0.4.2 — 2026-10-08
 
 - Fix standalone AC startup by bundling Python 3.3 socket extensions for both

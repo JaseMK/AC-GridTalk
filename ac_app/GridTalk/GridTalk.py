@@ -1,4 +1,4 @@
-"""GridTalk 0.4.1: UDP voice roster and speaking indicators."""
+"""GridTalk: UDP voice roster and speaking indicators."""
 import errno
 import json
 import math
@@ -7,15 +7,24 @@ import os
 import sys
 # AC ships Python 3.3 but omits its socket extension from the default path.
 # Resolve our own copy before importing socket, independent of other apps.
+# AC apps share one interpreter, so remove the path again once it has loaded.
 _library = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib',
                         'x64' if sys.maxsize > 2 ** 32 else 'x86')
-if _library not in sys.path:
+_library_added = _library not in sys.path
+if _library_added:
     sys.path.insert(0, _library)
-import socket
+try:
+    import socket
+finally:
+    if _library_added:
+        sys.path.remove(_library)
 import time
 import ac
 
+VERSION = '0.4.3'
 PORT = 9999
+BIND_RETRY_SECONDS = 3.0
+ERROR_LOG_SECONDS = 10.0
 MAX_PACKETS_PER_FRAME = 32
 MAX_RECEIVE_SECONDS = 0.001
 STALE_SECONDS = 5.0
@@ -37,6 +46,10 @@ _ordered_members = []
 _order_key = None
 _invalid_text = re.compile('[\x00\ud800-\udfff]')
 _socket = None
+_next_bind = 0.0
+_bind_failed = False
+_next_error_log = 0.0
+_suppressed_errors = 0
 _app = None
 _status = None
 _rows = []
@@ -58,7 +71,7 @@ _layout_width = 130
 
 
 def acMain(ac_version):
-    global _socket, _app, _status, _rows, _pills, _layout_key, _visual_status
+    global _app, _status, _rows, _pills, _layout_key, _visual_status, _bind_failed
     _app = ac.newApp("GridTalk")
     ac.initFont(0, "Arial", 0, 0)
     ac.initFont(0, "Arial", 0, 1)
@@ -78,18 +91,31 @@ def acMain(ac_version):
     _visual_status = None
     _font_weights.clear()
     _pill_states.clear()
+    _bind_failed = False  # the new status label needs the failure text
+    _bind(time.monotonic())
+    return "GridTalk"
+
+
+def _bind(now):
+    """Bind the receiver, or schedule a retry while another process holds the port."""
+    global _socket, _next_bind, _bind_failed, _dirty
     candidate = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         # Numeric bytes avoid loading IDNA/unicodedata for a loopback-only address.
         candidate.bind((b"127.0.0.1", PORT))
         candidate.setblocking(False)
-        _socket = candidate
-        ac.log("GridTalk 0.4.1 listening on 127.0.0.1:" + str(PORT))
     except OSError as exc:
         candidate.close()
-        ac.setText(_status, "UDP port unavailable: " + str(PORT))
-        ac.log("GridTalk bind failed: " + str(exc))
-    return "GridTalk"
+        _next_bind = now + BIND_RETRY_SECONDS
+        if not _bind_failed:
+            ac.setText(_status, "UDP port unavailable: " + str(PORT) + " (retrying)")
+            ac.log("GridTalk bind failed, retrying every {:g} s: {}".format(BIND_RETRY_SECONDS, exc))
+            _bind_failed = True
+        return
+    _socket = candidate
+    _bind_failed = False
+    _dirty = True
+    ac.log("GridTalk " + VERSION + " listening on 127.0.0.1:" + str(PORT))
 
 
 def _integer(value, minimum=0, maximum=MAX_INTEGER):
@@ -123,7 +149,7 @@ def _validate(event):
     if not isinstance(event, dict) or type(event.get('v')) is not int or not _bounded_json(event):
         return None
     version, kind = event.get('v'), event.get('event')
-    if version not in (1, 2) or (version == 1 and kind not in ('reset', 'talk')):
+    if version not in (1, 2) or (version == 1 and kind != 'reset'):
         return None
     source = event.get('source', 'default')
     if not _string(source, 64, False):
@@ -221,8 +247,8 @@ class _SourceState:
     def accept(self, event, now, budget):
         kind = event['event']
         self.expire(now)
-        if kind == 'bridge_status' or (kind == 'talk' and event['v'] == 1):
-            message = event.get('message', 'Legacy sender - update to protocol v2')
+        if kind == 'bridge_status':
+            message = event['message']
             if message != self.bridge_message:
                 self.bridge_message = message
                 self.dirty = True
@@ -521,10 +547,13 @@ def _text_width(text, font_size):
 
 
 def acUpdate(delta_t):
-    global _dirty, _last_health
-    if _socket is None:
-        return
+    global _dirty, _last_health, _next_error_log, _suppressed_errors
     now = time.monotonic()
+    if _socket is None:
+        if now >= _next_bind:
+            _bind(now)
+        if _socket is None:
+            return
     for packet_index in range(MAX_PACKETS_PER_FRAME):
         # Check every four datagrams to keep the ordinary one-packet path cheap.
         if packet_index and packet_index % 4 == 0 and time.monotonic() - now >= MAX_RECEIVE_SECONDS:
@@ -533,7 +562,14 @@ def acUpdate(delta_t):
             data, address = _socket.recvfrom(65535)
         except OSError as exc:
             if exc.errno not in (errno.EAGAIN, errno.EWOULDBLOCK, 10035):
-                ac.log("GridTalk UDP error: " + str(exc))
+                # A persistent socket fault must not write to py_log.txt every frame.
+                if now >= _next_error_log:
+                    suffix = " ({} similar errors suppressed)".format(_suppressed_errors) if _suppressed_errors else ""
+                    ac.log("GridTalk UDP error: " + str(exc) + suffix)
+                    _next_error_log = now + ERROR_LOG_SECONDS
+                    _suppressed_errors = 0
+                else:
+                    _suppressed_errors += 1
             break
         try:
             # Coalesce source rosters once after the bounded receive batch.

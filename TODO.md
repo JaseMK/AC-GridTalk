@@ -6,7 +6,8 @@ The plan below records future work, not permission to start every item now.
 
 ## Current position
 
-- Current application version is v0.4.1; v0.3.0 remains the existing Git release tag.
+- Current application version is v0.4.3 (unreleased); v0.3.0 and v0.4.2 are the existing Git release tags.
+  The version is defined once in `CMakeLists.txt` (DLL) and `VERSION` in `GridTalk.py` (AC app).
 - Offline Python/UDP benchmarks and initial UI optimisations are complete;
   see [the performance assessment](docs/PERFORMANCE.md).
 - Offline performance changes are complete. GridTalk branding, independent UDP
