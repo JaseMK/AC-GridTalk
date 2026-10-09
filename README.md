@@ -1,158 +1,154 @@
 # GridTalk
 
-GridTalk is a local UDP voice-activity overlay for Assetto Corsa, version 0.4.3.
-The provider-neutral Python app receives channel rosters and speaking events
-from voice-app senders on `127.0.0.1:9999`. Multiple sources can share the port;
-their rosters, user IDs, resets, and timeouts are handled independently.
+An in-game overlay for Assetto Corsa that shows who is in your TeamSpeak
+channel and who is talking right now.
 
-**Assetto Corsa Notifier** is the bundled Windows x64 TeamSpeak 3.6.2 sender
-(plugin API 26), built as `assetto_corsa_notifier.dll`. It publishes everyone in
-your active TeamSpeak tab's current channel. Other voice apps can integrate via
-the [public sender protocol and JSON Schema](docs/SENDER_PROTOCOL.md); Discord
-integration is not included yet.
+- Everyone in your current TeamSpeak channel, with a red/green light that turns
+  green while they transmit. Active speakers' names go bold; your own name is
+  marked "(you)".
+- Updates instantly when someone starts or stops talking, joins, leaves, or is
+  renamed. If a network update is missed, it corrects itself within a second.
+- The window sizes itself to the channel (up to 24 names) and stays small and
+  translucent.
 
-The overlay shows fixed-position red/green speaking dots, displays names in white
-with bold white for active speakers, and marks your own name. The shaded grey
-app shows up to 24 users (with an overflow count) with no paging buttons or packet counter. Each user
-has a darker rounded pill and a larger shaded traffic light; active pills take
-on a subtle green tint. Small cached textures provide the rounded ends and shaded
-lights using AC's textured-quad renderer. Its height
-fits the visible users; width is capped at 420 pixels and long names are clipped.
-Names are TeamSpeak display names, not automatically mapped to AC cars.
+GridTalk has two parts that talk to each other over your own PC only
+(`127.0.0.1`, UDP port 9999). Nothing is sent over the internet.
 
-## Install or upgrade
+| Part | What it is |
+| --- | --- |
+| **Assetto Corsa Notifier** | TeamSpeak 3 plugin that reports your channel |
+| **GridTalk** | Assetto Corsa Python app that draws the overlay |
 
-Close TeamSpeak and exit the AC driving session, then run the installer from
-PowerShell in this folder:
+## Requirements
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\Install.ps1
-```
+- Windows, 64-bit **TeamSpeak 3** client (3.6.x; plugin API 26). TeamSpeak 5/6
+  are not supported.
+- **Assetto Corsa** (works with or without Content Manager).
 
-The bypass applies only to that one process; Windows blocks local scripts by
-default, so running `.\Install.ps1` directly usually fails. The installer backs
-up the old files into this project's `backups` directory and installs both the
-DLL and Python app. It moves the old `ts_ac_udp.dll` and
-`TSVoice` app into the backup folder to prevent duplicate installations.
-After upgrading, enable the newly named addon and app. Its default AC path matches the Steam
-installation found on this machine. Override with `-AssettoCorsaPath` if needed.
+## Install
 
-For manual installation, replace BOTH files:
+Download both files from the [latest release](../../releases/latest):
 
-- `build/Release/assetto_corsa_notifier.dll` -> `%APPDATA%/TS3Client/plugins/assetto_corsa_notifier.dll`
-- Copy the entire `ac_app/GridTalk` folder, including `assets` and `lib`, into `<AC>/apps/python`.
+1. **TeamSpeak plugin**: close TeamSpeak, then double-click
+   `AssettoCorsaNotifier-<version>.ts3_plugin`. TeamSpeak's installer opens and
+   warns that the package is unsigned; continue to install. Start TeamSpeak and
+   check that **Assetto Corsa Notifier** is enabled under
+   *Tools → Options → Addons*.
+2. **Assetto Corsa app**: extract `GridTalk-<version>.zip` into your Assetto
+   Corsa folder (for Steam, usually
+   `C:\Program Files (x86)\Steam\steamapps\common\assettocorsa`). This creates
+   `apps\python\GridTalk`. Content Manager users can drag the zip onto Content
+   Manager instead.
+3. **Enable the app**: tick **GridTalk** in the Python apps list (Content
+   Manager: *Settings → Assetto Corsa → Python apps*; original launcher:
+   *Options → General → UI Modules*). In a session, open GridTalk from the apps
+   bar on the right of the screen.
 
-Restart TeamSpeak and enable **Assetto Corsa Notifier** under Tools > Options > Addons.
-Check that its version is **0.4.3**. Enable GridTalk in AC's Python app settings
-and open it from the in-game apps bar. The DLL is x64; use the 64-bit TS client.
+To upgrade, repeat steps 1 and 2; the new files replace the old ones.
 
-## Connection diagnosis
+<details>
+<summary>Installing the TeamSpeak plugin by hand</summary>
 
-The app distinguishes these states:
+A `.ts3_plugin` file is a zip. Rename it to `.zip`, then copy
+`plugins\assetto_corsa_notifier.dll` into `%APPDATA%\TS3Client\plugins` and
+restart TeamSpeak.
+</details>
 
-- **Waiting for voice sender**: no recognized packet has arrived.
-- The user list appears when connected, with no status line during normal use.
-- **Voice sender disconnected**: no fresh connected source has a usable channel.
-- **Voice connection lost**: no recognized packet for five seconds. Speaker highlights are cleared.
-- **UDP port unavailable (retrying)**: another receiver is using 9999. GridTalk
-  retries every three seconds and connects once the port is free.
+**Uninstall:** remove the plugin in TeamSpeak's *Addons* page, and delete
+`apps\python\GridTalk` from the Assetto Corsa folder.
 
-With AC closed, `python tools/listen.py` prints live packets. Do not run it while
-AC is listening, because only one receiver may bind port 9999. TeamSpeak logs
-contain plugin startup, first roster snapshot, and the first UDP send failure.
-AC's `Documents/Assetto Corsa/logs/py_log.txt` contains receiver startup/errors.
+## Troubleshooting
 
-## Behavior and performance
+The overlay shows a status line when it isn't displaying a normal roster:
 
-See [the measured performance assessment](docs/PERFORMANCE.md) for benchmark
-results, optimizations, and the remaining in-game FPS comparison.
-The [code assessment](docs/CODE_REVIEW.md) records the original findings;
-[the hardening report](docs/HARDENING.md) records the implemented fixes,
-regression evidence, and remaining live checks.
+| Status | Meaning |
+| --- | --- |
+| Waiting for voice sender | Nothing received yet. Is TeamSpeak running with the plugin enabled? |
+| Voice sender disconnected | TeamSpeak is running but not connected to a server. |
+| Voice connection lost | No updates for five seconds (TeamSpeak closed or the plugin disabled). Speaking lights are cleared. |
+| Channel is empty | Connected, but the voice app reported an empty channel. |
+| UDP port unavailable: 9999 (retrying) | Another program is using port 9999. GridTalk keeps retrying every three seconds. |
+| Showing 24 of N users | Large channel; only the first 24 names are shown. |
 
-Speaking transitions arrive immediately through the TS callback. A one-second
-roster refresh uses `getClientSelfVariableAsInt` for your own transmission state,
-and local PTT transitions also use `onClientSelfVariableUpdateEvent`. Failed
-state queries preserve the previous indicator instead of falsely clearing it.
-A one-second
-timer sends complete channel state, so an app started later receives the roster
-and speaking state without needing someone to start talking. Joins, departures,
-moves (including by an admin), kicks, bans, timeouts and renames in your channel
-queue one coalesced immediate refresh; snapshots also repair missed UDP events.
-The timer uses an owned message window on TeamSpeak's plugin-init thread.
-Shutdown destroys that window and waits for admitted callbacks before closing UDP.
-There is no audio transmission or server polling.
+Logs:
 
-The AC receiver is nonblocking. An idle frame makes one receive attempt, and a
-busy frame handles at most 32 datagrams, with a 1 ms receive budget checked every
-four packets. Packet, snapshot, text, and UI limits bound retained resources. State changes update the display promptly;
-the connection status refreshes at most once per second while idle. UDP does not
-guarantee delivery; lost snapshot pages are discarded and the next complete
-snapshot replaces them. Roster changes normally appear immediately, and at most
-one second later if an event is missed; missed speaking events recover on the next snapshot. Only people in your
-current channel are displayed, including whispers from those people. Activity
-while the microphone is muted is ignored.
+- TeamSpeak: *Tools → Client Log* shows plugin startup and any send errors.
+- Assetto Corsa: `Documents\Assetto Corsa\logs\py_log.txt` shows GridTalk
+  startup and receive errors.
+- With Assetto Corsa closed, `python tools/listen.py` prints the packets
+  TeamSpeak is sending.
 
-## Develop another sender
+**Limitations:** only people in your current channel of the active TeamSpeak
+tab are shown. Names are TeamSpeak names and aren't matched to cars. Speaking
+while your microphone is muted is ignored.
 
-The [full protocol guide](docs/SENDER_PROTOCOL.md) documents every field,
-transport limits, lifecycle, source isolation, page assembly, and recovery.
-Use [the JSON Schema](protocol/gridtalk-v2.schema.json) and
-[example packets](protocol/examples) to implement and validate a bridge for
-another voice app. New senders should provide a stable `source` identity,
-immediate `talk` events, and complete `state` snapshots about once a second.
-Only users established by a snapshot appear in the overlay.
+## Other voice apps
 
-Development-only schema validation instructions are in the guide. The in-game
-app requires no JSON Schema library or third-party Python packages.
+The overlay doesn't depend on TeamSpeak. Any program can feed it by sending
+small JSON messages to `127.0.0.1:9999`. The [sender protocol](docs/SENDER_PROTOCOL.md),
+[JSON Schema](protocol/gridtalk-v2.schema.json) and
+[example packets](protocol/examples) describe the format. A Discord bridge is
+not included yet.
 
-## Build and test
+## Building from source
 
-Requires CMake, Visual Studio C++ tools, Python, and the official TeamSpeak SDK:
+Requires Windows, CMake 3.20+, Visual Studio C++ build tools, Python 3, and the
+TeamSpeak plugin SDK at the pinned revision:
 
 ```powershell
 git clone https://github.com/teamspeak/ts3client-pluginsdk.git sdk
 git -C sdk checkout 4aa90a53aa150cbf81e13bc97e68c0431b26499f
-cmake -S . -B build -A x64 -DGRIDTALK_BUILD_TESTS=ON
+cmake -S . -B build -A x64
 cmake --build build --config Release
-python tests/check.py
 ```
 
-Tests require port 9999 free. They exercise native speaking callbacks and a real
-Windows timer/message loop with stub SDK functions, real loopback UDP, roster
-pagination, reordered snapshot pages, JSON escaping, channel filtering, independent
-simultaneous senders (including overlapping IDs and separate resets/timeouts), recovery
-from missed stop events, stale status, and the per-frame packet limit. They mock
-the AC UI; actual in-game display and TS runtime still require live validation.
+This produces `build\Release\assetto_corsa_notifier.dll`. The AC app in
+`ac_app\GridTalk` is plain Python and needs no build. The version number is set
+once in `CMakeLists.txt` (`project(... VERSION ...)`) and must match `VERSION`
+in `ac_app/GridTalk/GridTalk.py`.
 
-PTT regression tests cover holding the local microphone active across a timer
-snapshot and rapid local release/press events. To test while AC uses port 9999:
+### Tests
+
+Tests use a separate build that sends to port 19999, so they can run while
+Assetto Corsa is open:
 
 ```powershell
-cmake -S . -B build-tests -A x64 -DGRIDTALK_BUILD_TESTS=ON -DGRIDTALK_UDP_PORT=19999
-cmake --build build-tests --config Release
-python tests/check.py --port 19999 --build-dir build-tests
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+powershell -ExecutionPolicy Bypass -File tests\run_all.ps1
 ```
 
-Install only the production DLL from `build/Release`, which targets port 9999.
+`run_all.ps1` builds `build-tests`, then runs the schema, native plugin and
+overlay tests. If Assetto Corsa is installed, it also runs the overlay inside
+the game's own embedded Python 3.3 (`-SkipAcRuntime` skips this step). GitHub
+Actions runs the same suite on every push.
 
-The build instructions pin the SDK revision used for v0.3.0. Build outputs,
-the downloaded SDK, and local installation backups are excluded from Git.
-UI textures are tracked; regenerating them with `tools/make_ui_assets.py`
-requires Pillow, which is not needed by the in-game app.
+### Releasing
 
-Change the destination using `-DGRIDTALK_UDP_PORT=9999` and the Python `PORT` constant
-(also update the diagnostic listener). The fetched SDK is ignored by git; its
-upstream licensing terms apply to its headers.
+1. Update the version in `CMakeLists.txt` and `ac_app/GridTalk/GridTalk.py`,
+   and add a `CHANGELOG.md` entry.
+2. Commit, then tag and push: `git tag v0.4.3` and `git push origin main v0.4.3`.
+3. The release workflow builds the DLL, runs `tools/package.py`, and creates a
+   **draft** GitHub release with both downloads attached. Review it on GitHub
+   and click *Publish*.
 
-Hardening regression checks (native test build uses port 19999):
+To build the downloads locally instead, run `python tools/package.py` after
+the production build. It writes them to `dist\` and refuses a DLL built for
+the test port or a different version.
 
-```powershell
-python tests/receiver_hardening.py
-python tests/native_hardening.py
-./tests/installer.ps1
-```
+## Repository layout
 
-The native/schema checks use the development-only validator described in the
-sender guide. Installer failure tests use isolated fake installations under
-`build/`; the live game installation is not modified by those tests.
+| Path | Contents |
+| --- | --- |
+| `src/plugin.c` | TeamSpeak plugin |
+| `ac_app/GridTalk/` | Assetto Corsa app (copied as-is into `apps/python`) |
+| `protocol/`, `docs/SENDER_PROTOCOL.md` | Wire protocol for other senders |
+| `tests/` | Native, overlay, schema and AC-runtime tests |
+| `tools/` | Packaging, packet listener, benchmark, UI texture generator |
+
+## Licence
+
+GridTalk is released under the [MIT licence](LICENSE). The bundled `_socket`
+modules in `ac_app/GridTalk/lib` are from CPython 3.3 and are covered by the
+[Python licence](ac_app/GridTalk/lib/PYTHON-LICENSE.txt).
+The TeamSpeak SDK is fetched separately and is subject to its own terms.

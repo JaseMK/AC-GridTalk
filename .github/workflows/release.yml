@@ -1,0 +1,54 @@
+name: release
+
+# Push a version tag (git tag v0.4.3 && git push origin v0.4.3) to build the
+# production DLL and publish the two downloads as a draft GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      # Pinned TeamSpeak plugin SDK revision; keep in sync with README "Building from source".
+      TS_SDK_COMMIT: 4aa90a53aa150cbf81e13bc97e68c0431b26499f
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Fetch pinned TeamSpeak SDK
+        shell: pwsh
+        run: |
+          git init sdk
+          git -C sdk remote add origin https://github.com/teamspeak/ts3client-pluginsdk.git
+          git -C sdk fetch --depth 1 origin $env:TS_SDK_COMMIT
+          git -C sdk checkout --detach FETCH_HEAD
+
+      - name: Build production DLL (port 9999)
+        run: |
+          cmake -S . -B build -A x64
+          cmake --build build --config Release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          python tools/package.py
+          $version = (Get-ChildItem dist/GridTalk-*.zip).BaseName -replace '^GridTalk-', ''
+          if ("v$version" -ne $env:GITHUB_REF_NAME) {
+            throw "Tag $env:GITHUB_REF_NAME does not match project version $version"
+          }
+
+      # Draft, so you can review the notes and files before publishing.
+      - name: Create draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME dist/* --draft --title "GridTalk $env:GITHUB_REF_NAME" --notes "See CHANGELOG.md for changes. Install instructions: README.md#install"

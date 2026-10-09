@@ -13,7 +13,13 @@
   import, and rate-limit receive-error logging to once per 10 seconds.
 - Remove the unreachable legacy v1 talk diagnostic; v1 talk packets are rejected.
   The v1 reset emitted by the TS3 sender is still accepted.
-- Document running the installer with a process-scoped execution-policy bypass.
+- Distribute as two downloads: a `.ts3_plugin` package that TeamSpeak installs on
+  double-click, and a zip to extract into the Assetto Corsa folder. Built by
+  `tools/package.py` and published by a tag-triggered GitHub Actions workflow.
+  The PowerShell installer is removed.
+- Rewrite the README for users; remove internal review, hardening and
+  performance reports (still in Git history).
+- Release under the MIT licence.
 
 ## 0.4.2 — 2026-10-08
 
