@@ -5,8 +5,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'build/schema-deps'))
-from jsonschema import Draft202012Validator
+try:
+    from jsonschema import Draft202012Validator
+except ImportError:
+    # Legacy fallback for a vendored copy; prefer `pip install -r requirements-dev.txt`.
+    if not (ROOT / 'build/schema-deps').is_dir():
+        raise
+    sys.path.insert(0, str(ROOT / 'build/schema-deps'))
+    from jsonschema import Draft202012Validator
 
 
 def packet_validator():
