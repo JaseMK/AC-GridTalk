@@ -40,6 +40,7 @@ try {
     Invoke-Step 'check_schema' { & $Python tests/check_schema.py }
     Invoke-Step 'check --schema' { & $Python tests/check.py --schema --port $port --build-dir $buildDir }
     Invoke-Step 'receiver_hardening' { & $Python tests/receiver_hardening.py }
+    Invoke-Step 'options' { & $Python tests/options.py }
     Invoke-Step 'native_hardening' { & $Python tests/native_hardening.py --port $port --build-dir $buildDir }
     if ($SkipAcRuntime) {
         $results.Add('SKIP  ac_runtime (-SkipAcRuntime)')

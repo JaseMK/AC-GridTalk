@@ -37,6 +37,7 @@ MAX_JSON_DEPTH = 8
 MAX_JSON_NODES = 256
 MAX_VISIBLE_ROWS = 24
 MAX_WINDOW_WIDTH = 420
+MAX_HOLD_SECONDS = 10.0
 SOURCE_RETENTION = 60.0
 SEQUENCE_RETENTION = 300.0
 MAX_INTEGER = 9007199254740991
@@ -68,11 +69,65 @@ _pill_states = {}
 _layout_key = None
 _visual_status = None
 _layout_width = 130
+_CONFIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config')
+_DEFAULT_SETTINGS = {'show_title_bar': True, 'background_opacity': 0.40, 'speaking_hold_seconds': 0.0}
+_settings = dict(_DEFAULT_SETTINGS)
+_was_talking = set()
+_hold_until = {}
+_hold_deadline = None
+
+
+def _read_ini(path):
+    """Return {KEY: value} for the lines of a flat ini file; a missing file reads as empty."""
+    values = {}
+    try:
+        with open(path, encoding='utf-8-sig', errors='replace') as handle:
+            for line in handle:
+                line = line.split(';', 1)[0].strip()
+                if '=' in line and not line.startswith('['):
+                    key, value = line.split('=', 1)
+                    values[key.strip().upper()] = value.strip()
+    except (OSError, ValueError):
+        pass
+    return values
+
+
+def _load_settings():
+    """Read Content Manager's options: shipped defaults, then the user's overrides."""
+    values = _read_ini(os.path.join(_CONFIG_DIR, 'GridTalk_defaults.ini'))
+    values.update(_read_ini(os.path.join(_CONFIG_DIR, 'GridTalk.ini')))
+    settings = dict(_DEFAULT_SETTINGS)
+    shown = values.get('SHOW_TITLE_BAR', '').lower()
+    if shown in ('true', '1', 'on', 'yes'):
+        settings['show_title_bar'] = True
+    elif shown in ('false', '0', 'off', 'no'):
+        settings['show_title_bar'] = False
+    for key, name, maximum in (('BACKGROUND_OPACITY', 'background_opacity', 1.0),
+                               ('SPEAKING_HOLD_SECONDS', 'speaking_hold_seconds', MAX_HOLD_SECONDS)):
+        try:
+            number = float(values[key])
+        except (KeyError, ValueError):
+            continue
+        if math.isfinite(number):
+            settings[name] = min(max(number, 0.0), maximum)
+    return settings
+
+
+def _top_margin():
+    """Space above the roster: the title bar's height, or a small gap without it."""
+    return 32 if _settings['show_title_bar'] else 6
 
 
 def acMain(ac_version):
-    global _app, _status, _rows, _pills, _layout_key, _visual_status, _bind_failed
+    global _app, _status, _rows, _pills, _layout_key, _visual_status, _bind_failed, _settings
+    global _hold_deadline
+    _settings = _load_settings()
+    _was_talking.clear()
+    _hold_until.clear()
+    _hold_deadline = None
     _app = ac.newApp("GridTalk")
+    if not _settings['show_title_bar']:
+        ac.setTitle(_app, "")
     ac.initFont(0, "Arial", 0, 0)
     ac.initFont(0, "Arial", 0, 1)
     ac.setSize(_app, 220, 58)
@@ -80,12 +135,12 @@ def acMain(ac_version):
     # Move AC's logo off-window; the title bar still appears on hover for dragging.
     ac.setIconPosition(_app, 0, -10000)
     ac.setBackgroundColor(_app, 0.22, 0.22, 0.22)
-    ac.setBackgroundOpacity(_app, 0.40)
+    ac.setBackgroundOpacity(_app, _settings['background_opacity'])
     for name in ("red", "green"):
         _textures[name] = ac.newTexture("apps/python/GridTalk/assets/" + name + ".png")
     ac.addRenderCallback(_app, _draw_backgrounds)
     _status = ac.addLabel(_app, "Waiting for voice sender")
-    ac.setPosition(_status, 10, 32)
+    ac.setPosition(_status, 10, _top_margin())
     ac.setFontSize(_status, 12)
     _rows = []
     _pills = []
@@ -452,6 +507,8 @@ def _render(now):
     if status != _visual_status:
         ac.setText(_status, status)
         ac.setVisible(_status, 1 if status else 0)
+    hold = _settings['speaking_hold_seconds']
+    lit = _speaking_keys(now, hold) if hold and not stale else ()
     while len(_rows) < len(names):
         # Native backgrounds are created BEFORE the text control. The custom
         # render callback runs over native labels, so it must not draw pills.
@@ -466,7 +523,7 @@ def _render(now):
         ac.setFontSize(label, 14)
         ac.setFontColor(label, 1, 1, 1, 1)
         _rows.append(label)
-    top = 54 if status else 32
+    top = _top_margin() + (22 if status else 0)
     if layout_changed:
         texts = [" ".join((m["name"] or "Client " + str(m["client_id"])).split()) +
                  (" (you)" if m["self"] else "") for m in names]
@@ -484,7 +541,7 @@ def _render(now):
                 ac.setVisible(background, int(visible))
         if visible:
             member = names[index]
-            speaking = member["talking"] and not stale
+            speaking = (member["talking"] and not stale) or (_ordered_members[index] in lit)
             if layout_changed:
                 ac.setText(label, texts[index])
                 ac.setPosition(label, 36, top + index * 28 + 3)
@@ -512,6 +569,25 @@ def _render(now):
     _shapes = shapes
     _layout_key = layout_key
     _visual_status = status
+
+
+def _speaking_keys(now, hold):
+    """Members who spoke within the last `hold` seconds, and so stay lit."""
+    global _hold_deadline
+    for key in [key for key in _hold_until if key not in _members]:
+        del _hold_until[key]
+    _was_talking.intersection_update(_members)
+    for key, member in _members.items():
+        if member['talking']:
+            _was_talking.add(key)
+            _hold_until.pop(key, None)
+        elif key in _was_talking:
+            _was_talking.discard(key)
+            _hold_until[key] = now + hold
+    for key in [key for key, until in _hold_until.items() if until <= now]:
+        del _hold_until[key]
+    _hold_deadline = min(_hold_until.values()) if _hold_until else None
+    return set(_hold_until)
 
 
 def _draw_backgrounds(delta_t):
@@ -581,6 +657,8 @@ def acUpdate(delta_t):
         except (ValueError, UnicodeError, RuntimeError):
             continue
     _refresh_sources(now)
+    if _hold_deadline is not None and now >= _hold_deadline:
+        _dirty = True
     if _dirty or now - _last_health >= 1.0:
         _render(now)
         _dirty = False
