@@ -627,6 +627,9 @@ def _text_width(text, font_size):
 def acUpdate(delta_t):
     global _dirty, _last_health, _next_error_log, _suppressed_errors
     now = time.monotonic()
+    # AC restores its default background while the window is hovered or dragged,
+    # and offers no way to read the value back, so apply ours every frame.
+    ac.setBackgroundOpacity(_app, _settings['background_opacity'])
     if _socket is None:
         if now >= _next_bind:
             _bind(now)

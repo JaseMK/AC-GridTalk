@@ -24,7 +24,7 @@ for name in ("setPosition", "setFontSize", "initFont", "setCustomFont", "setBack
              "setFontColor", "setVisible", "setText", "log"):
     setattr(ac, name, lambda *args: None)
 ac.setTitle = lambda app, title: calls.append(("title", title))
-ac.setBackgroundOpacity = lambda app, value: calls.append(("opacity", value))
+ac.setBackgroundOpacity = lambda target, value: calls.append(("opacity", value)) if target == app._app else None
 sizes = {}
 ac.setSize = lambda target, *size: sizes.update({target: size})
 sys.modules["ac"] = ac
@@ -129,4 +129,11 @@ assert lamps(200.0) == [True]
 app._members[("t", 1)]["talking"] = False
 app._dirty = True
 assert lamps(200.1) == [False]
+# AC resets the window opacity while it is dragged, so every frame re-applies it.
+start(shipped, "BACKGROUND_OPACITY=0.1\n")
+app._socket = types.SimpleNamespace(recvfrom=lambda size: (_ for _ in ()).throw(OSError(10035, "none")))
+del calls[:]
+app.acUpdate(0.016)
+app.acUpdate(0.016)
+assert calls == [("opacity", 0.1)] * 2, calls
 print("PASS: options file defaults/overrides/clamping, title bar, opacity, speaking hold")
