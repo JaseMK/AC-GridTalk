@@ -371,9 +371,11 @@ try:
     auth = peer.message()
     assert auth['payload']['content'] == {'apiKey': 'KEY-1'}, auth
 
-    # Losing the connection during sign-in keeps the saved key: a dropped socket, or
-    # TeamSpeak closing because it is shutting down (1001) or restarting (1012).
-    for goodbye in (None, 1001, 1012):
+    # TeamSpeak 6 answers Deny by dropping the connection during sign-in (seen live),
+    # then drops each new attempt. The saved key is kept, since a drop doesn't show
+    # it is bad, but the relay backs off, doubling the wait, instead of nagging.
+    waits = []
+    for goodbye in (None, 1008):
         started = time.monotonic()
         if goodbye is None:
             peer.conn.close()
@@ -381,36 +383,34 @@ try:
             peer.close(goodbye)
         peer = accept(server)
         auth = peer.message()
+        waits.append(time.monotonic() - started)
         assert auth['payload']['content'] == {'apiKey': 'KEY-1'}, (goodbye, auth)
-        assert time.monotonic() - started < 1.2, 'a lost connection reconnects at the normal pace'
+    assert waits[0] >= 1.4 and waits[1] >= 2.9, ('the wait starts at 5x the retry interval and doubles', waits)
     assert 'api_key=KEY-1' in config.read_text(encoding='utf-8')
-
-    # TeamSpeak deliberately closing during sign-in is a refusal: the key is
-    # forgotten, so the next attempt asks the user again, after a longer wait.
-    started = time.monotonic()
-    peer.close(1008)
-    peer = accept(server)
-    auth = peer.message()
-    assert auth['payload']['content'] == {'apiKey': ''}, auth
-    assert time.monotonic() - started >= 1.4, 'a refusal backs off'
-    assert 'api_key=KEY-1' not in config.read_text(encoding='utf-8')
+    assert any('TeamSpeak did not allow GridTalk; asking again in 3 s' in line for line in log), log[-5:]
     second_server = [{'id': 3, 'clientId': 5,
                       'channelInfos': {'rootChannels': [channel(30, 'Back again')], 'subChannels': {}},
                       'clientInfos': [client(5, 30, ME)]}]
-    peer.event('auth', apiKey='KEY-2', connections=second_server)
+    peer.event('auth', apiKey='KEY-1', connections=second_server)
     roster = inbox.roster(lambda r: r['connected'], 'roster after signing in again')
     assert roster['server'] == '3' and names(roster) == {5: ME}, roster
 
-    # An error reply (TeamSpeak 6 adds a status object) refuses the saved key too.
+    # Dropping while signed in reconnects at the normal pace; signing in reset the backoff.
+    started = time.monotonic()
     peer.close()
     peer = accept(server)
     auth = peer.message()
-    assert auth['payload']['content'] == {'apiKey': 'KEY-2'}, auth
+    assert time.monotonic() - started < 1.2, 'a lost connection reconnects at the normal pace'
+
+    # An explicit error reply (TeamSpeak 6 adds a status object) means the key itself
+    # was refused: it is forgotten so that TeamSpeak asks the user again.
+    assert auth['payload']['content'] == {'apiKey': 'KEY-1'}, auth
     peer.send(json.dumps({'type': 'auth', 'status': {'code': 1, 'message': 'invalid api key'},
                           'payload': {'apiKey': '', 'connections': []}}).encode())
     peer = accept(server)
     auth = peer.message()
     assert auth['payload']['content'] == {'apiKey': ''}, auth
+    assert 'api_key=KEY-1' not in config.read_text(encoding='utf-8')
     assert any('TeamSpeak refused GridTalk: invalid api key (code 1)' in line for line in log), log[-5:]
     peer.send(json.dumps({'type': 'auth', 'status': {'code': 0, 'message': 'ok'},
                           'payload': {'apiKey': 'KEY-3', 'connections': second_server}}).encode())
@@ -513,6 +513,6 @@ assert app._connected
 
 print('PASS: relay handshake, approval hint and saved key, talk/move/join/leave/rename, fragments and pings')
 print('PASS: pagination, active-tab switching, disconnects, reconnect, --stop, schema and receiver replay')
-print('PASS: saved key kept on dropped/shutdown/restart closes; forgotten after a refusal or error reply, with backoff')
+print('PASS: saved key kept when sign-in is dropped (TeamSpeak 6 Deny), with doubling backoff; forgotten after an error reply')
 print('PASS: start with Windows on/off, icon and version resources, tray mode start and --stop')
 print('PASS: relay peak working set {:.1f} MB, private {:.1f} MB, CPU {:.2f} s over the run'.format(peak_mb, private_mb, cpu))

@@ -44,7 +44,7 @@
 #define MENU_AUTOSTART 2
 #define RUN_VALUE L"GridTalk TS6 Relay"
 
-enum { STATUS_WAITING, STATUS_APPROVAL, STATUS_NO_SERVER, STATUS_LIVE };
+enum { STATUS_WAITING, STATUS_APPROVAL, STATUS_NO_SERVER, STATUS_LIVE, STATUS_REFUSED };
 /* Release packaging checks this text for the version and the default port. */
 static const char build_info[] = "GridTalk TS6 Relay " GRIDTALK_VERSION " (default UDP 127.0.0.1:" STRINGIFY(GRIDTALK_UDP_PORT) ")";
 static const wchar_t* const status_text[] = {
@@ -52,12 +52,14 @@ static const wchar_t* const status_text[] = {
     L"GridTalk TS6 Relay: allow GridTalk in TeamSpeak",
     L"GridTalk TS6 Relay: TeamSpeak is not on a server",
     L"GridTalk TS6 Relay: sending your channel to GridTalk",
+    L"GridTalk TS6 Relay: not allowed in TeamSpeak; asking again later",
 };
 static const char* const status_log[] = {
     "Waiting for TeamSpeak (Remote Apps on port %u)",
     "Waiting for you to allow GridTalk in TeamSpeak",
     "Connected to TeamSpeak; not on a server",
     "Sending the current channel to GridTalk",
+    "Not allowed in TeamSpeak yet",
 };
 
 typedef struct {
@@ -94,7 +96,6 @@ static struct {
     size_t message_length, message_capacity;
     int message_open;
     int reported_failure;
-    int close_code;             /* from TeamSpeak's close frame, or 0 if the connection just dropped */
     int rejected;               /* TeamSpeak answered the sign-in with an error */
     unsigned refusals;          /* consecutive refusals, for the backoff */
 } link_state = { INVALID_SOCKET };
@@ -915,34 +916,35 @@ static void shrink_buffers(void) {
 static void link_close(const char* reason) {
     ULONGLONG now = GetTickCount64();
     unsigned delay = retry_ms;
-    int was = link_state.state;
+    int was = link_state.state, refused = 0;
     if (link_state.socket != INVALID_SOCKET) {
         closesocket(link_state.socket);
         link_state.socket = INVALID_SOCKET;
     }
     if (was == LINK_AUTH) {
-        /* A refusal is an error reply, or TeamSpeak deliberately closing the socket
-           (the user declined, or the saved key was revoked). A dropped connection, or
-           a close because TeamSpeak is shutting down or restarting, is not: the saved
-           approval is kept and the relay reconnects as usual. */
-        int code = link_state.close_code;
-        if (link_state.rejected || (code && code != 1001 && code != 1011 && code != 1012 && code != 1013)) {
-            unsigned long long wait = (unsigned long long)retry_ms * DENIED_RETRY_FACTOR;
-            unsigned i;
-            for (i = 1; i < link_state.refusals + 1 && wait < MAX_DENIED_RETRY_MS; ++i) wait *= 2;
-            delay = (unsigned)(wait < MAX_DENIED_RETRY_MS ? wait : MAX_DENIED_RETRY_MS);
-            ++link_state.refusals;
-            reason = "TeamSpeak did not approve GridTalk";
-            if (link_state.sent_stored_key) {
-                api_key[0] = 0;
-                save_config();
-                reason = "TeamSpeak refused the saved approval; it will ask again";
-            }
-        } else if (link_state.sent_stored_key) {
-            reason = "Lost the connection to TeamSpeak while signing in; keeping the saved approval";
+        /* TeamSpeak 6 answers Deny by dropping the connection mid sign-in, with no error
+           reply or close code, and then drops later attempts at once without asking the
+           user again. Retrying every few seconds would only nag, so any drop during
+           sign-in backs off, doubling the wait up to five minutes. The saved key is kept:
+           a drop doesn't show it is bad, and TeamSpeak hands back the same key when
+           GridTalk is approved again. Only an explicit error reply (handle_auth) means
+           the key itself was refused, and then it is forgotten so TeamSpeak asks again. */
+        unsigned long long wait = (unsigned long long)retry_ms * DENIED_RETRY_FACTOR;
+        unsigned i;
+        for (i = 0; i < link_state.refusals && wait < MAX_DENIED_RETRY_MS; ++i) wait *= 2;
+        delay = (unsigned)(wait < MAX_DENIED_RETRY_MS ? wait : MAX_DENIED_RETRY_MS);
+        ++link_state.refusals;
+        refused = 1;
+        if (link_state.rejected && link_state.sent_stored_key) {
+            api_key[0] = 0;
+            save_config();
+            log_line("TeamSpeak refused the saved approval; asking again in %u s", (delay + 500) / 1000);
+        } else {
+            log_line("TeamSpeak did not allow GridTalk; asking again in %u s", (delay + 500) / 1000);
         }
+    } else if (was >= LINK_HANDSHAKE || !link_state.reported_failure) {
+        log_line("%s", reason);
     }
-    if (was >= LINK_HANDSHAKE || !link_state.reported_failure) log_line("%s", reason);
     link_state.reported_failure = 1;
     if (published) {
         send_reset();
@@ -954,7 +956,7 @@ static void link_close(const char* reason) {
     link_state.rx_length = link_state.message_length = 0;
     link_state.message_open = 0;
     shrink_buffers();
-    set_status(STATUS_WAITING);
+    set_status(refused ? STATUS_REFUSED : STATUS_WAITING);
 }
 
 static void link_start(void) {
@@ -973,7 +975,6 @@ static void link_start(void) {
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     link_state.socket = s;
     link_state.state = LINK_CONNECTING;
-    link_state.close_code = 0;
     link_state.rejected = 0;
     link_state.since = GetTickCount64();
     if (connect(s, (const struct sockaddr*)&address, sizeof(address)) == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)
@@ -1093,7 +1094,8 @@ static int read_frames(void) {
         offset += header + (size_t)length;
         switch (opcode) {
         case 0x8:  /* close: echo the status code, then drop */
-            link_state.close_code = length >= 2 ? payload[0] << 8 | payload[1] : 1005;  /* 1005: no code given */
+            if (dump_mode)  /* 1005: no code given */
+                log_line("  TeamSpeak closed the WebSocket with code %d", length >= 2 ? payload[0] << 8 | payload[1] : 1005);
             ws_send(0x8, (const char*)payload, length >= 2 ? 2 : 0);
             return 0;
         case 0x9:  /* ping */
