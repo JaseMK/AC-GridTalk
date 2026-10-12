@@ -122,9 +122,9 @@ try:
     check(visible[status] == 0, 'status not cleared after recovery: ' + labels[status])
     check(lamps == {'Driver 43': red, me: green}, lamps)
     # Aliases: names are logged (hex keys survive non-ASCII under 3.3) and an alias replaces the name.
-    logged = open(GridTalk._CONFIG_DIR + '/Aliases.ini', encoding='utf-8').read()
+    logged = open(GridTalk._CONFIG_DIR + '/GridTalk_Aliases.ini', encoding='utf-8').read()
     check(GridTalk._alias_key(me) in logged and '; Alias for ' + me in logged, logged)
-    with open(GridTalk._CONFIG_DIR + '/Aliases.ini', 'w', encoding='utf-8') as handle:
+    with open(GridTalk._CONFIG_DIR + '/GridTalk_Aliases.ini', 'w', encoding='utf-8') as handle:
         handle.write('[ALIASES]\n' + GridTalk._alias_key(me) + '=Simon ; x\n')
     GridTalk._load_aliases()
     frame()

@@ -52,7 +52,7 @@ def start(defaults="", user=None):
 # Shipped defaults file is valid and keeps today's behaviour.
 shipped = (root / "ac_app/GridTalk/config/GridTalk_defaults.ini").read_text(encoding="utf-8")
 assert app._read_ini(str(root / "ac_app/GridTalk/config/GridTalk_defaults.ini")).keys() == \
-    {"ORDER", "SHOW_TITLE_BAR", "BACKGROUND_OPACITY", "SPEAKING_HOLD_SECONDS", "UI_SCALE"}
+    {"SHOW_TITLE_BAR", "BACKGROUND_OPACITY", "SPEAKING_HOLD_SECONDS", "UI_SCALE"}
 started = start(shipped)
 assert "title" not in started and started["opacity"] == 0.40
 assert app._settings["speaking_hold_seconds"] == 0
@@ -156,7 +156,7 @@ start(shipped, "UI_SCALE=0\n")
 assert app._settings["ui_scale"] == 0.5
 
 # Aliases: names are logged for Content Manager and replaced by the alias the user types.
-alias_file = config / "Aliases.ini"
+alias_file = config / "GridTalk_Aliases.ini"
 if alias_file.exists():
     alias_file.unlink()
 texts = {}
@@ -171,12 +171,12 @@ app._render(600.0)
 text = alias_file.read_text(encoding="utf-8")
 crow = app._alias_key("BigCrow88")
 lines = text.splitlines()
-assert lines[:4] == ["[\u2139]", "ORDER=1", "", "[ALIASES]"]  # sorts after the main options page
-assert len(lines) == 4 + 2 * 2  # two names, each with an alias box and a remove tick; the unnamed one is not logged
+assert lines[0] == "[ALIASES]" and "\u2139" not in text  # no info section, so no info icon
+assert len(lines) == 1 + 2 * 2  # two names, each with an alias box and a remove tick; the unnamed one is not logged
 assert crow + "= ; Alias for BigCrow88" in text
 assert "d_" + crow[2:] + "=false ; Remove BigCrow88 from this list" in text
 assert "; Alias for Zed [x], odd 日本" in text
-assert all(re.match(r"^[\w -]+=", line) for line in lines[4:])  # legal keys for Content Manager
+assert all(re.match(r"^[\w -]+=", line) for line in lines[1:])  # legal keys for Content Manager
 assert [texts[row] for row in app._rows[:3]] == ["Client 3", "BigCrow88", odd]
 # Names already logged don't touch the file again.
 stamp = alias_file.stat().st_mtime_ns
@@ -207,7 +207,7 @@ app._members[("t", 5)] = dict(client_id=5, name="Fifth", talking=False, self=Fal
 app._dirty = True
 app._render(603.0)
 text = alias_file.read_text(encoding="utf-8")
-assert crow + "=Simon ;" in text and len(text.splitlines()) == 4 + 2 * 3 and app._alias_key("Fifth") in text
+assert crow + "=Simon ;" in text and len(text.splitlines()) == 1 + 2 * 3 and app._alias_key("Fifth") in text
 # Ticking "remove" drops the name and its alias, and it is not logged again this session.
 fifth = app._alias_key("Fifth")
 alias_file.write_text(text.replace("d_" + fifth[2:] + "=false", "d_" + fifth[2:] + "=true")
@@ -218,7 +218,7 @@ clock[0] = 605.0
 app._last_packet = 605.0
 app.acUpdate(0.016)
 text = alias_file.read_text(encoding="utf-8")
-assert fifth not in text and crow + "=Simon2 ;" in text and len(text.splitlines()) == 4 + 2 * 2
+assert fifth not in text and crow + "=Simon2 ;" in text and len(text.splitlines()) == 1 + 2 * 2
 app._dirty = True
 app._render(605.5)
 assert fifth not in alias_file.read_text(encoding="utf-8")
@@ -226,7 +226,18 @@ assert fifth not in alias_file.read_text(encoding="utf-8")
 alias_file.write_text("[ALIASES]\n" + crow + "=Old ; x\n", encoding="utf-8")
 app._load_aliases()
 text = alias_file.read_text(encoding="utf-8")
-assert text.startswith("[\u2139]\nORDER=1") and crow + "=Old ;" in text and "d_" + crow[2:] + "=false" in text
+assert text.startswith("[ALIASES]") and crow + "=Old ;" in text and "d_" + crow[2:] + "=false" in text
+# A file written by 0.5.1 (info section, which shows an icon) loses the section.
+alias_file.write_text("[\u2139]\nORDER=1\n\n[ALIASES]\n" + crow + "=Kept ; x\nd_" + crow[2:] + "=false ; y\n",
+                      encoding="utf-8")
+app._load_aliases()
+text = alias_file.read_text(encoding="utf-8")
+assert "\u2139" not in text and "ORDER" not in text and crow + "=Kept ;" in text
+# The 0.5.1 name Aliases.ini is renamed, keeping its content, when the app starts.
+alias_file.rename(config / "Aliases.ini")
+start(shipped)
+assert alias_file.exists() and not (config / "Aliases.ini").exists()
+assert crow + "=Kept ;" in alias_file.read_text(encoding="utf-8")
 # An unwritable folder is survivable.
 app._CONFIG_DIR = str(config / "missing")
 app._members[("t", 6)] = dict(client_id=6, name="Sixth", talking=False, self=False, source="t")

@@ -21,7 +21,7 @@ finally:
 import time
 import ac
 
-VERSION = '0.5.0'
+VERSION = '0.5.2'
 PORT = 9999
 BIND_RETRY_SECONDS = 3.0
 ERROR_LOG_SECONDS = 10.0
@@ -43,7 +43,9 @@ MAX_UI_SCALE = 2.0
 MAX_ALIASES = 200
 MAX_ALIAS_CHARS = 64
 ALIAS_KEY_CHARS = 64
-ALIAS_INFO_SECTION = '[\u2139]'  # Content Manager's per-page info section
+ALIAS_FILE = 'GridTalk_Aliases.ini'  # Sorts straight after GridTalk.ini in Content Manager
+OLD_ALIAS_FILE = 'Aliases.ini'
+LEGACY_INFO_SECTION = '[\u2139]'  # Added by development builds to order the pages; it shows an info icon
 SOURCE_RETENTION = 60.0
 SEQUENCE_RETENTION = 300.0
 MAX_INTEGER = 9007199254740991
@@ -152,14 +154,14 @@ def _alias_label(key):
 
 
 def _read_aliases():
-    """Return ({key: alias}, [keys in file order], {keys ticked for removal}, in current format)."""
-    aliases, keys, removals, current = {}, [], set(), False
+    """Return ({key: alias}, [keys in file order], {keys ticked for removal}, in the current format)."""
+    aliases, keys, removals, ticks, legacy = {}, [], set(), False, False
     try:
-        with open(os.path.join(_CONFIG_DIR, 'Aliases.ini'), encoding='utf-8-sig', errors='replace') as handle:
+        with open(os.path.join(_CONFIG_DIR, ALIAS_FILE), encoding='utf-8-sig', errors='replace') as handle:
             for line in handle:
                 line = line.split(';', 1)[0].strip()
                 if line.startswith('['):
-                    current = current or line == ALIAS_INFO_SECTION
+                    legacy = legacy or line == LEGACY_INFO_SECTION
                 elif line[:2].lower() == 'n_' and '=' in line:
                     key, value = line.split('=', 1)
                     key = key.strip().lower()
@@ -167,31 +169,41 @@ def _read_aliases():
                         keys.append(key)
                     aliases[key] = ' '.join(value.split())[:MAX_ALIAS_CHARS]
                 elif line[:2].lower() == 'd_' and '=' in line:
+                    ticks = True
                     key, value = line.split('=', 1)
                     if value.strip().lower() in ('true', '1', 'yes', 'on'):
                         removals.add('n_' + key.strip()[2:].lower())
     except (OSError, ValueError):
         pass
-    return aliases, keys, removals, current
+    return aliases, keys, removals, ticks and not legacy
 
 
 def _write_aliases(aliases, keys):
-    # The info section sorts this page after the main options. Each name has an
-    # alias box and a tick box: Content Manager has no button to run a command.
-    lines = [ALIAS_INFO_SECTION, 'ORDER=1', '', '[ALIASES]']
+    # Each name has an alias box and a tick box: Content Manager has no button to run a command.
+    lines = ['[ALIASES]']
     for key in keys:
         label = _alias_label(key)
         lines.append('{}={} ; Alias for {}'.format(key, aliases[key], label))
         lines.append('d_{}=false ; Remove {} from this list'.format(key[2:], label))
-    path = os.path.join(_CONFIG_DIR, 'Aliases.ini')
+    path = os.path.join(_CONFIG_DIR, ALIAS_FILE)
     temporary = path + '.tmp'
     with open(temporary, 'w', encoding='utf-8') as handle:
         handle.write('\n'.join(lines) + '\n')
     os.replace(temporary, path)
 
 
+def _migrate_alias_file():
+    """Development builds called the file Aliases.ini, which Content Manager listed before the main options."""
+    old, new = os.path.join(_CONFIG_DIR, OLD_ALIAS_FILE), os.path.join(_CONFIG_DIR, ALIAS_FILE)
+    try:
+        if os.path.exists(old) and not os.path.exists(new):
+            os.replace(old, new)
+    except OSError:
+        pass
+
+
 def _read_and_prune():
-    """Read Aliases.ini, drop the names the user ticked for removal, and upgrade an older file."""
+    """Read the alias file, drop the names the user ticked for removal, and upgrade an older file."""
     global _alias_write_failed
     aliases, keys, removals, current = _read_aliases()
     gone = [key for key in keys if key in removals]
@@ -203,7 +215,7 @@ def _read_and_prune():
             _alias_write_failed = False
         except OSError as exc:
             if not _alias_write_failed:
-                ac.log('GridTalk could not save Aliases.ini: ' + str(exc))
+                ac.log('GridTalk could not save ' + ALIAS_FILE + ': ' + str(exc))
                 _alias_write_failed = True
     return aliases, keys
 
@@ -212,7 +224,7 @@ def _load_aliases():
     global _aliases, _aliases_mtime, _dirty
     aliases = dict((key, value) for key, value in _read_and_prune()[0].items() if value)
     try:
-        _aliases_mtime = os.stat(os.path.join(_CONFIG_DIR, 'Aliases.ini')).st_mtime
+        _aliases_mtime = os.stat(os.path.join(_CONFIG_DIR, ALIAS_FILE)).st_mtime
     except OSError:
         _aliases_mtime = None
     if aliases != _aliases:
@@ -221,7 +233,7 @@ def _load_aliases():
 
 
 def _record_names(names):
-    """Add newly seen names to Aliases.ini so they can be given an alias in Content Manager."""
+    """Add newly seen names to the alias file so they can be given an alias in Content Manager."""
     global _alias_write_failed
     fresh = [name for name in names if name.strip() and _alias_key(name) not in _recorded]
     if not fresh:
@@ -250,7 +262,7 @@ def _record_names(names):
         _alias_write_failed = False
     except OSError as exc:
         if not _alias_write_failed:
-            ac.log('GridTalk could not save Aliases.ini: ' + str(exc))
+            ac.log('GridTalk could not save ' + ALIAS_FILE + ': ' + str(exc))
             _alias_write_failed = True
     _load_aliases()
 
@@ -271,6 +283,7 @@ def acMain(ac_version):
     _aliases.clear()
     _unrecorded.clear()
     _recorded.clear()
+    _migrate_alias_file()
     _load_aliases()
     _app = ac.newApp("GridTalk")
     if not _settings['show_title_bar']:
@@ -777,7 +790,7 @@ def _text_width(text, font_size):
 
 def _reload_aliases_if_changed():
     try:
-        mtime = os.stat(os.path.join(_CONFIG_DIR, 'Aliases.ini')).st_mtime
+        mtime = os.stat(os.path.join(_CONFIG_DIR, ALIAS_FILE)).st_mtime
     except OSError:
         mtime = None
     if mtime != _aliases_mtime:

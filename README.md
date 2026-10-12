@@ -85,7 +85,7 @@ they need a new alias. Once the list is full the oldest names without an alias
 are dropped.
 
 Without Content Manager, edit `apps\python\GridTalk\config\GridTalk.ini`
-(copy the lines from `GridTalk_defaults.ini`) or `Aliases.ini` in the same folder.
+(copy the lines from `GridTalk_defaults.ini`) or `GridTalk_Aliases.ini` in the same folder.
 
 ## Troubleshooting
 

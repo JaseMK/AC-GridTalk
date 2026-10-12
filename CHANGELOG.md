@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 — 2026-10-12
 
 - Add an app scale option (50%–200%) that resizes the whole overlay.
-- Add player aliases: GridTalk logs the names it has seen in `config\Aliases.ini`
+- Add player aliases: GridTalk logs the names it has seen in `config\GridTalk_Aliases.ini`
   (a page in Content Manager's Python app settings, listed after the main
   options) and shows the alias you type instead of the TeamSpeak name. Tick
   *Remove from this list* to delete an entry. Aliases follow the display name,
