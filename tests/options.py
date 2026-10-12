@@ -52,7 +52,7 @@ def start(defaults="", user=None):
 # Shipped defaults file is valid and keeps today's behaviour.
 shipped = (root / "ac_app/GridTalk/config/GridTalk_defaults.ini").read_text(encoding="utf-8")
 assert app._read_ini(str(root / "ac_app/GridTalk/config/GridTalk_defaults.ini")).keys() == \
-    {"SHOW_TITLE_BAR", "BACKGROUND_OPACITY", "SPEAKING_HOLD_SECONDS", "UI_SCALE"}
+    {"ORDER", "SHOW_TITLE_BAR", "BACKGROUND_OPACITY", "SPEAKING_HOLD_SECONDS", "UI_SCALE"}
 started = start(shipped)
 assert "title" not in started and started["opacity"] == 0.40
 assert app._settings["speaking_hold_seconds"] == 0
@@ -170,10 +170,13 @@ app._connected, app._last_packet, app._dirty = True, 600.0, True
 app._render(600.0)
 text = alias_file.read_text(encoding="utf-8")
 crow = app._alias_key("BigCrow88")
-assert text.splitlines()[0] == "[ALIASES]" and len(text.splitlines()) == 3  # the unnamed client is not logged
-assert crow + "= ; BigCrow88" in text
-assert "; Zed [x], odd 日本" in text
-assert all(re.match(r"^[\w -]+=", line) for line in text.splitlines()[1:])  # legal keys for Content Manager
+lines = text.splitlines()
+assert lines[:4] == ["[\u2139]", "ORDER=1", "", "[ALIASES]"]  # sorts after the main options page
+assert len(lines) == 4 + 2 * 2  # two names, each with an alias box and a remove tick; the unnamed one is not logged
+assert crow + "= ; Alias for BigCrow88" in text
+assert "d_" + crow[2:] + "=false ; Remove BigCrow88 from this list" in text
+assert "; Alias for Zed [x], odd 日本" in text
+assert all(re.match(r"^[\w -]+=", line) for line in lines[4:])  # legal keys for Content Manager
 assert [texts[row] for row in app._rows[:3]] == ["Client 3", "BigCrow88", odd]
 # Names already logged don't touch the file again.
 stamp = alias_file.stat().st_mtime_ns
@@ -204,7 +207,26 @@ app._members[("t", 5)] = dict(client_id=5, name="Fifth", talking=False, self=Fal
 app._dirty = True
 app._render(603.0)
 text = alias_file.read_text(encoding="utf-8")
-assert crow + "=Simon ;" in text and len(text.splitlines()) == 4 and app._alias_key("Fifth") in text
+assert crow + "=Simon ;" in text and len(text.splitlines()) == 4 + 2 * 3 and app._alias_key("Fifth") in text
+# Ticking "remove" drops the name and its alias, and it is not logged again this session.
+fifth = app._alias_key("Fifth")
+alias_file.write_text(text.replace("d_" + fifth[2:] + "=false", "d_" + fifth[2:] + "=true")
+                      .replace(crow + "=Simon", crow + "=Simon2"), encoding="utf-8")
+os.utime(str(alias_file), (stamp / 1e9 + 9, stamp / 1e9 + 9))
+app._last_health = 0
+clock[0] = 605.0
+app._last_packet = 605.0
+app.acUpdate(0.016)
+text = alias_file.read_text(encoding="utf-8")
+assert fifth not in text and crow + "=Simon2 ;" in text and len(text.splitlines()) == 4 + 2 * 2
+app._dirty = True
+app._render(605.5)
+assert fifth not in alias_file.read_text(encoding="utf-8")
+# An older file (no info section, no tick boxes) is upgraded in place.
+alias_file.write_text("[ALIASES]\n" + crow + "=Old ; x\n", encoding="utf-8")
+app._load_aliases()
+text = alias_file.read_text(encoding="utf-8")
+assert text.startswith("[\u2139]\nORDER=1") and crow + "=Old ;" in text and "d_" + crow[2:] + "=false" in text
 # An unwritable folder is survivable.
 app._CONFIG_DIR = str(config / "missing")
 app._members[("t", 6)] = dict(client_id=6, name="Sixth", talking=False, self=False, source="t")

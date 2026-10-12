@@ -43,6 +43,7 @@ MAX_UI_SCALE = 2.0
 MAX_ALIASES = 200
 MAX_ALIAS_CHARS = 64
 ALIAS_KEY_CHARS = 64
+ALIAS_INFO_SECTION = '[\u2139]'  # Content Manager's per-page info section
 SOURCE_RETENTION = 60.0
 SEQUENCE_RETENTION = 300.0
 MAX_INTEGER = 9007199254740991
@@ -151,26 +152,37 @@ def _alias_label(key):
 
 
 def _read_aliases():
-    """Return ({key: alias}, [keys in file order]) from Aliases.ini."""
-    aliases, keys = {}, []
+    """Return ({key: alias}, [keys in file order], {keys ticked for removal}, in current format)."""
+    aliases, keys, removals, current = {}, [], set(), False
     try:
         with open(os.path.join(_CONFIG_DIR, 'Aliases.ini'), encoding='utf-8-sig', errors='replace') as handle:
             for line in handle:
                 line = line.split(';', 1)[0].strip()
-                if line.lower().startswith('n_') and '=' in line:
+                if line.startswith('['):
+                    current = current or line == ALIAS_INFO_SECTION
+                elif line[:2].lower() == 'n_' and '=' in line:
                     key, value = line.split('=', 1)
                     key = key.strip().lower()
                     if key not in aliases:
                         keys.append(key)
                     aliases[key] = ' '.join(value.split())[:MAX_ALIAS_CHARS]
+                elif line[:2].lower() == 'd_' and '=' in line:
+                    key, value = line.split('=', 1)
+                    if value.strip().lower() in ('true', '1', 'yes', 'on'):
+                        removals.add('n_' + key.strip()[2:].lower())
     except (OSError, ValueError):
         pass
-    return aliases, keys
+    return aliases, keys, removals, current
 
 
 def _write_aliases(aliases, keys):
-    lines = ['[ALIASES]']
-    lines.extend('{}={} ; {}'.format(key, aliases[key], _alias_label(key)) for key in keys)
+    # The info section sorts this page after the main options. Each name has an
+    # alias box and a tick box: Content Manager has no button to run a command.
+    lines = [ALIAS_INFO_SECTION, 'ORDER=1', '', '[ALIASES]']
+    for key in keys:
+        label = _alias_label(key)
+        lines.append('{}={} ; Alias for {}'.format(key, aliases[key], label))
+        lines.append('d_{}=false ; Remove {} from this list'.format(key[2:], label))
     path = os.path.join(_CONFIG_DIR, 'Aliases.ini')
     temporary = path + '.tmp'
     with open(temporary, 'w', encoding='utf-8') as handle:
@@ -178,9 +190,27 @@ def _write_aliases(aliases, keys):
     os.replace(temporary, path)
 
 
+def _read_and_prune():
+    """Read Aliases.ini, drop the names the user ticked for removal, and upgrade an older file."""
+    global _alias_write_failed
+    aliases, keys, removals, current = _read_aliases()
+    gone = [key for key in keys if key in removals]
+    if gone or (keys and not current):
+        keys = [key for key in keys if key not in removals]
+        aliases = dict((key, aliases[key]) for key in keys)
+        try:
+            _write_aliases(aliases, keys)
+            _alias_write_failed = False
+        except OSError as exc:
+            if not _alias_write_failed:
+                ac.log('GridTalk could not save Aliases.ini: ' + str(exc))
+                _alias_write_failed = True
+    return aliases, keys
+
+
 def _load_aliases():
     global _aliases, _aliases_mtime, _dirty
-    aliases = dict((key, value) for key, value in _read_aliases()[0].items() if value)
+    aliases = dict((key, value) for key, value in _read_and_prune()[0].items() if value)
     try:
         _aliases_mtime = os.stat(os.path.join(_CONFIG_DIR, 'Aliases.ini')).st_mtime
     except OSError:
@@ -197,7 +227,7 @@ def _record_names(names):
     if not fresh:
         return  # Nothing new, so no file access on ordinary frames.
     _recorded.update(_alias_key(name) for name in fresh)
-    aliases, keys = _read_aliases()  # Re-read first so edits made in Content Manager are kept.
+    aliases, keys = _read_and_prune()  # Re-read first so edits made in Content Manager are kept.
     added = False
     for name in fresh:
         key = _alias_key(name)

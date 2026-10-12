@@ -9,6 +9,7 @@ import platform
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import types
 from pathlib import Path
@@ -36,6 +37,7 @@ def load_app(source):
     clock = [100.0]
     app.time = types.SimpleNamespace(monotonic=lambda: clock[0])
     app.PORT = 0
+    app._CONFIG_DIR = tempfile.mkdtemp()  # the alias log must not touch the real config
     app.acMain("benchmark")
     return app, clock, calls
 

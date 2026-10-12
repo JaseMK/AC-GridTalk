@@ -71,11 +71,14 @@ GridTalk*. Changes apply the next time you start a session.
 
 ### Aliases
 
-GridTalk keeps a list of every name it has seen, up to 200, in *Python app
-settings → Aliases*. Type a name like "Simon" next to someone's TeamSpeak name
-and the overlay shows that instead; leave it empty to keep their real name. The
-page lists a name once you have been in a session with that person, and
-changes are picked up within a second or two of saving.
+The *Aliases* page, shown after the main options, lists the people GridTalk
+has seen, so it grows as you meet people (up to 200). Type a name like "Simon"
+in someone's *Alias* box and the overlay shows that instead; leave it empty to
+keep their real name. To drop someone from the list, tick *Remove … from this
+list* and save; their alias goes with them. Content Manager has no buttons, so
+the removal happens when GridTalk next checks the file, within a second or two
+while a session is running or when the next one starts. Someone you remove is
+added again the next time you meet them.
 
 Aliases belong to a TeamSpeak display name, so if someone renames themselves
 they need a new alias. Once the list is full the oldest names without an alias
