@@ -57,7 +57,7 @@ def control(*args):
 control.count = 0
 for name in ("newApp", "addLabel", "addButton", "newTexture"):
     setattr(ac, name, control)
-for name in ("setPosition", "setFontSize", "initFont", "setCustomFont", "setBackgroundTexture", "addOnClickedListener", "drawBorder", "setIconPosition", "setBackgroundOpacity", "setBackgroundColor", "addRenderCallback", "glQuadTextured", "glColor4f"):
+for name in ("setPosition", "setFontSize", "initFont", "setCustomFont", "setBackgroundTexture", "addOnClickedListener", "drawBorder", "setIconPosition", "setTitle", "setBackgroundOpacity", "setBackgroundColor", "addRenderCallback", "glQuadTextured", "glColor4f"):
     setattr(ac, name, lambda *args: None)
 ac.log = logs.append
 ac.setText = lambda label, text: labels.update({label: text})
@@ -78,7 +78,7 @@ def track_ui(name, original):
         return original(*args)
     return call
 for name in ("setText", "setVisible", "setPosition", "setSize", "setFontColor",
-             "setCustomFont", "setFontSize", "setBackgroundTexture", "setBackgroundOpacity"):
+             "setCustomFont", "setFontSize", "setBackgroundTexture"):  # window opacity is re-applied every frame
     setattr(ac, name, track_ui(name, getattr(ac, name)))
 sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 def send(event):

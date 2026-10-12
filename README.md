@@ -57,6 +57,20 @@ restart TeamSpeak.
 **Uninstall:** remove the plugin in TeamSpeak's *Addons* page, and delete
 `apps\python\GridTalk` from the Assetto Corsa folder.
 
+## Options
+
+In Content Manager, open *Settings → Assetto Corsa → Python app settings →
+GridTalk*. Changes apply the next time you start a session.
+
+| Option | What it does |
+| --- | --- |
+| Show title | Turn off to hide the "GridTalk" title text. The bar still appears when you hover the window, so you can drag it. |
+| Background opacity | 0% (fully transparent) to 100%. Only the grey window background changes; the name pills do not. Default 40%. |
+| Speaking hold | Keeps someone green for up to 10 extra seconds after they stop talking, so a short word is not missed. Default 0 (off). |
+
+Without Content Manager, edit `apps\python\GridTalk\config\GridTalk.ini`
+(copy the lines from `GridTalk_defaults.ini`).
+
 ## Troubleshooting
 
 The overlay shows a status line when it isn't displaying a normal roster:

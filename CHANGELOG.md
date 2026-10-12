@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 — 2026-10-12
+
+- Add options, editable in Content Manager under *Settings → Assetto Corsa →
+  Python app settings → GridTalk* (applied the next time a session starts):
+  - Show or hide the "GridTalk" title text.
+  - Background opacity, from fully transparent to opaque. User pills are unaffected.
+  - Speaking hold: keep a speaker lit green for 0–10 extra seconds after they
+    stop talking.
+- Your choices are stored in `config\GridTalk.ini`, which upgrades leave alone.
+
 ## 0.4.4 — 2026-10-09
 
 - Hide the Assetto Corsa logo from the GridTalk title bar.
