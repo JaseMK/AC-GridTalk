@@ -12,6 +12,7 @@ if(GRIDTALK_BUILD_TESTS)
   target_include_directories(test_lifecycle PRIVATE sdk/include)
   target_compile_definitions(test_lifecycle PRIVATE GRIDTALK_DYNAMIC_LIBRARY=1)
   target_link_libraries(test_lifecycle PRIVATE user32)
+  add_executable(test_json tests/json_parser.c relay/json.c)
   add_executable(test_format tests/formatting.c)
   target_include_directories(test_format PRIVATE sdk/include)
   target_compile_definitions(test_format PRIVATE GRIDTALK_UDP_PORT=19999 GRIDTALK_VERSION="${PROJECT_VERSION}")
@@ -28,4 +29,16 @@ target_link_libraries(assetto_corsa_notifier PRIVATE ws2_32 user32)
 set_target_properties(assetto_corsa_notifier PROPERTIES PREFIX "")
 if(MSVC)
   target_compile_options(assetto_corsa_notifier PRIVATE /W4)
+endif()
+
+# GridTalk TS6 Relay for TeamSpeak 5/6: a standalone tray app, so link the C runtime statically.
+add_executable(gridtalk_relay WIN32 relay/relay.c relay/json.c relay/relay.rc)
+target_compile_definitions(gridtalk_relay PRIVATE GRIDTALK_UDP_PORT=${GRIDTALK_UDP_PORT} GRIDTALK_VERSION="${PROJECT_VERSION}"
+                           GRIDTALK_VERSION_MAJOR=${PROJECT_VERSION_MAJOR} GRIDTALK_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+                           GRIDTALK_VERSION_PATCH=${PROJECT_VERSION_PATCH} UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS)
+target_link_libraries(gridtalk_relay PRIVATE ws2_32 bcrypt shell32 user32 advapi32)
+set_target_properties(gridtalk_relay PROPERTIES OUTPUT_NAME GridTalk-TS6-Relay
+                      MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+if(MSVC)
+  target_compile_options(gridtalk_relay PRIVATE /W4)
 endif()
