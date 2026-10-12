@@ -1,15 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-10-12
 
-- Support TeamSpeak 5 and 6 with the new GridTalk TS6 Relay: a small tray app
-  (`GridTalk-TS6-Relay-<version>.exe`) that reads your channel from TeamSpeak's
-  Remote Apps API and sends it to the overlay. TeamSpeak 3 users keep using the
-  plugin and don't need it. The overlay is unchanged. The relay
-  asks for approval in TeamSpeak once, follows the server tab whose microphone
-  is active, and reconnects when TeamSpeak restarts. Its tray icon turns green
-  while it is sending your channel, and its menu has a *Start with Windows*
-  option.
+- Support TeamSpeak 5 and 6 with the new **GridTalk TS6 Relay**, a small tray
+  app that reads your channel through TeamSpeak's Remote Apps feature and sends
+  it to the overlay. TeamSpeak 3 users keep using the plugin and don't need it.
+  The overlay itself is unchanged.
+  - TeamSpeak asks you to allow GridTalk once, and the approval is remembered.
+  - It follows the server tab whose microphone is active, and reconnects if
+    TeamSpeak restarts.
+  - Its tray icon's lamp is green while your channel is being sent. The icon's
+    menu has *Start with Windows* and *Exit*.
 
 ## 0.5.2 — 2026-10-12
 
