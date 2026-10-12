@@ -259,6 +259,17 @@ try:
     roster = inbox.roster(lambda r: r['clients'].get(5, {}).get('talking'), 'speaker in the periodic snapshot')
     peer.event('talkStatusChanged', connectionId=1, clientId=5, status=2, isWhisper=False)  # talking while disabled
     assert inbox.wait(lambda p: p['event'] == 'talk', 'talk while disabled')['talking'] is False
+    # TeamSpeak 6 reports our own talking twice (a property and a talk event): one packet per change.
+    peer.event('talkStatusChanged', connectionId=1, clientId=6, status=0, isWhisper=False)  # already silent
+    peer.event('clientSelfPropertyUpdated', connectionId=1, flag='flagTalking', newValue=True, oldValue=False)
+    peer.event('talkStatusChanged', connectionId=1, clientId=5, status=1, isWhisper=False)
+    peer.event('talkStatusChanged', connectionId=1, clientId=5, status=0, isWhisper=False)
+    peer.event('clientSelfPropertyUpdated', connectionId=1, flag='flagTalking', newValue=False, oldValue=True)
+    peer.event('talkStatusChanged', connectionId=1, clientId=6, status=1, isWhisper=False)
+    talks = [inbox.wait(lambda p: p['event'] == 'talk', 'deduplicated talk') for _ in range(3)]
+    assert [(t['client_id'], t['talking']) for t in talks] == [(5, True), (5, False), (6, True)], talks
+    peer.event('talkStatusChanged', connectionId=1, clientId=6, status=0, isWhisper=False)
+    inbox.wait(lambda p: p['event'] == 'talk' and p['client_id'] == 6 and not p['talking'], 'talk stop')
 
     # Joins, moves, leaves and renames update the roster straight away.
     inbox.mark()

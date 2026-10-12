@@ -637,8 +637,10 @@ static void handle_talk(unsigned connection_id, int payload) {
     if (dump_mode)
         log_line("  talk: connection %u client %u status %lld whisper %d%s", connection_id, id, talk_status, whisper,
                  m ? (in_view(connection_id, m->channel) ? " (in view)" : "") : " (unknown client)");
-    if (!m) return;
-    m->talking = talk_status == 1;  /* 2 is "talking while disabled": nothing is transmitted */
+    /* 2 is "talking while disabled": nothing is transmitted. TeamSpeak 6 reports our
+       own talking here and as a flagTalking property, so send only real changes. */
+    if (!m || m->talking == (talk_status == 1)) return;
+    m->talking = talk_status == 1;
     send_talk(m, whisper);
 }
 
@@ -705,7 +707,8 @@ static void handle_self_property(unsigned connection_id, int payload) {
         if (value && !c->input) c->active_since = GetTickCount64();
         c->input = value;
         roster_dirty = 1;
-    } else if (strcmp(flag, "flagTalking") == 0 && (m = find_member(connection_id, c->self)) != NULL) {
+    } else if (strcmp(flag, "flagTalking") == 0 && (m = find_member(connection_id, c->self)) != NULL &&
+               m->talking != value) {
         m->talking = value;
         send_talk(m, 0);
     }
