@@ -2,6 +2,7 @@
 import importlib.util
 import socket  # noqa: F401  (must precede GridTalk: its bundled 3.3 _socket cannot load)
 import sys
+import re
 import tempfile
 import types
 from pathlib import Path
@@ -51,7 +52,7 @@ def start(defaults="", user=None):
 # Shipped defaults file is valid and keeps today's behaviour.
 shipped = (root / "ac_app/GridTalk/config/GridTalk_defaults.ini").read_text(encoding="utf-8")
 assert app._read_ini(str(root / "ac_app/GridTalk/config/GridTalk_defaults.ini")).keys() == \
-    {"SHOW_TITLE_BAR", "BACKGROUND_OPACITY", "SPEAKING_HOLD_SECONDS"}
+    {"SHOW_TITLE_BAR", "BACKGROUND_OPACITY", "SPEAKING_HOLD_SECONDS", "UI_SCALE"}
 started = start(shipped)
 assert "title" not in started and started["opacity"] == 0.40
 assert app._settings["speaking_hold_seconds"] == 0
@@ -61,7 +62,7 @@ started = start(shipped, "[OPTIONS]\nSHOW_TITLE_BAR=false\nBACKGROUND_OPACITY=0\
 assert started == {"title": "", "opacity": 0.0}
 assert app._settings["speaking_hold_seconds"] == 2.5 and app._top_margin() < 32
 start(shipped, "BACKGROUND_OPACITY=7\nSPEAKING_HOLD_SECONDS=999\nSHOW_TITLE_BAR=maybe\n")
-assert app._settings == dict(show_title_bar=True, background_opacity=1.0, speaking_hold_seconds=10.0)
+assert app._settings == dict(show_title_bar=True, background_opacity=1.0, speaking_hold_seconds=10.0, ui_scale=1.0)
 start(shipped, "BACKGROUND_OPACITY=nan\nSPEAKING_HOLD_SECONDS=-3\n")
 assert app._settings["background_opacity"] == 0.40 and app._settings["speaking_hold_seconds"] == 0.0
 start("", None)  # no files at all
@@ -136,4 +137,111 @@ del calls[:]
 app.acUpdate(0.016)
 app.acUpdate(0.016)
 assert calls == [("opacity", 0.1)] * 2, calls
-print("PASS: options file defaults/overrides/clamping, title bar, opacity, speaking hold")
+# UI scale: every layout size follows it, and the setting is clamped.
+def one_row(scale):
+    start(shipped, "UI_SCALE=" + scale + "\n")
+    app._members = {("t", 1): dict(client_id=1, name="A", talking=True, self=False, source="t")}
+    app._connected, app._last_packet, app._dirty = True, 500.0, True
+    app._render(500.0)
+    return sizes[app._app][1], app._shapes[0][:4]
+
+
+assert one_row("1") == (32 + 28 + 4, (11, 34, 20, 20))
+assert one_row("2") == (32 + 56 + 8, (22, 32 + 4, 40, 40))
+assert one_row("0.5") == (32 + 14 + 2, (6, 33, 10, 10))
+assert app._settings["ui_scale"] == 0.5
+start(shipped, "UI_SCALE=9\n")
+assert app._settings["ui_scale"] == 2.0
+start(shipped, "UI_SCALE=0\n")
+assert app._settings["ui_scale"] == 0.5
+
+# Aliases: names are logged for Content Manager and replaced by the alias the user types.
+alias_file = config / "GridTalk_Aliases.ini"
+if alias_file.exists():
+    alias_file.unlink()
+texts = {}
+ac.setText = lambda label, text: texts.__setitem__(label, text)
+start(shipped)
+odd = "Zed (x); odd 日本"
+app._members = {("t", 1): dict(client_id=1, name="BigCrow88", talking=False, self=False, source="t"),
+                ("t", 2): dict(client_id=2, name=odd, talking=False, self=False, source="t"),
+                ("t", 3): dict(client_id=3, name="", talking=False, self=False, source="t")}
+app._connected, app._last_packet, app._dirty = True, 600.0, True
+app._render(600.0)
+text = alias_file.read_text(encoding="utf-8")
+crow = app._alias_key("BigCrow88")
+lines = text.splitlines()
+assert lines[0] == "[ALIASES]" and "\u2139" not in text  # no info section, so no info icon
+assert len(lines) == 1 + 2 * 2  # two names, each with an alias box and a remove tick; the unnamed one is not logged
+assert crow + "= ; Alias for BigCrow88" in text
+assert "d_" + crow[2:] + "=false ; Remove BigCrow88 from this list" in text
+assert "; Alias for Zed [x], odd 日本" in text
+assert all(re.match(r"^[\w -]+=", line) for line in lines[1:])  # legal keys for Content Manager
+assert [texts[row] for row in app._rows[:3]] == ["Client 3", "BigCrow88", odd]
+# Names already logged don't touch the file again.
+stamp = alias_file.stat().st_mtime_ns
+app._dirty = True
+app._render(600.5)
+assert alias_file.stat().st_mtime_ns == stamp
+# Editing the file while GridTalk runs: the alias is picked up at the next health check.
+alias_file.write_text(text.replace(crow + "=", crow + "=Simon"), encoding="utf-8")
+import os
+os.utime(str(alias_file), (stamp / 1e9 + 5, stamp / 1e9 + 5))
+clock = [601.0]
+app.time = types.SimpleNamespace(monotonic=lambda: clock[0])
+app._socket = types.SimpleNamespace(recvfrom=lambda size: (_ for _ in ()).throw(OSError(10035, "none")))
+app._last_packet, app._last_health = 601.0, 0
+app.acUpdate(0.016)
+assert [texts[row] for row in app._rows[:3]] == ["Client 3", odd, "Simon"] or \
+    [texts[row] for row in app._rows[:3]] == ["Client 3", "Simon", odd], [texts[row] for row in app._rows[:3]]
+assert "Simon" in [texts[row] for row in app._rows[:3]] and "BigCrow88" not in [texts[row] for row in app._rows[:3]]
+# A new name is logged without losing the user's alias; a blank alias reverts to the real name.
+app._members[("t", 4)] = dict(client_id=4, name="Newcomer", talking=False, self=False, source="t")
+app._dirty = True
+app._render(602.0)
+text = alias_file.read_text(encoding="utf-8")
+assert crow + "=Simon ;" in text and app._alias_key("Newcomer") + "= ;" in text
+# The log is capped; entries with an alias are never dropped.
+app.MAX_ALIASES = 3
+app._members[("t", 5)] = dict(client_id=5, name="Fifth", talking=False, self=False, source="t")
+app._dirty = True
+app._render(603.0)
+text = alias_file.read_text(encoding="utf-8")
+assert crow + "=Simon ;" in text and len(text.splitlines()) == 1 + 2 * 3 and app._alias_key("Fifth") in text
+# Ticking "remove" drops the name and its alias, and it is not logged again this session.
+fifth = app._alias_key("Fifth")
+alias_file.write_text(text.replace("d_" + fifth[2:] + "=false", "d_" + fifth[2:] + "=true")
+                      .replace(crow + "=Simon", crow + "=Simon2"), encoding="utf-8")
+os.utime(str(alias_file), (stamp / 1e9 + 9, stamp / 1e9 + 9))
+app._last_health = 0
+clock[0] = 605.0
+app._last_packet = 605.0
+app.acUpdate(0.016)
+text = alias_file.read_text(encoding="utf-8")
+assert fifth not in text and crow + "=Simon2 ;" in text and len(text.splitlines()) == 1 + 2 * 2
+app._dirty = True
+app._render(605.5)
+assert fifth not in alias_file.read_text(encoding="utf-8")
+# An older file (no info section, no tick boxes) is upgraded in place.
+alias_file.write_text("[ALIASES]\n" + crow + "=Old ; x\n", encoding="utf-8")
+app._load_aliases()
+text = alias_file.read_text(encoding="utf-8")
+assert text.startswith("[ALIASES]") and crow + "=Old ;" in text and "d_" + crow[2:] + "=false" in text
+# A file written by 0.5.1 (info section, which shows an icon) loses the section.
+alias_file.write_text("[\u2139]\nORDER=1\n\n[ALIASES]\n" + crow + "=Kept ; x\nd_" + crow[2:] + "=false ; y\n",
+                      encoding="utf-8")
+app._load_aliases()
+text = alias_file.read_text(encoding="utf-8")
+assert "\u2139" not in text and "ORDER" not in text and crow + "=Kept ;" in text
+# The 0.5.1 name Aliases.ini is renamed, keeping its content, when the app starts.
+alias_file.rename(config / "Aliases.ini")
+start(shipped)
+assert alias_file.exists() and not (config / "Aliases.ini").exists()
+assert crow + "=Kept ;" in alias_file.read_text(encoding="utf-8")
+# An unwritable folder is survivable.
+app._CONFIG_DIR = str(config / "missing")
+app._members[("t", 6)] = dict(client_id=6, name="Sixth", talking=False, self=False, source="t")
+app._dirty = True
+app._render(604.0)
+app._CONFIG_DIR = str(config)
+print("PASS: options file defaults/overrides/clamping, title bar, opacity, speaking hold, UI scale, aliases")

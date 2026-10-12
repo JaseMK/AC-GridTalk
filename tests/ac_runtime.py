@@ -50,6 +50,8 @@ try:
     offset = [0.0]
     GridTalk.time = types.SimpleNamespace(monotonic=lambda: time.monotonic() + offset[0])
     GridTalk.PORT = 0
+    import tempfile
+    GridTalk._CONFIG_DIR = tempfile.mkdtemp()
     GridTalk.acMain('runtime test')
     check(GridTalk._socket is not None, 'receiver did not bind: ' + repr(logs))
     address = (b'127.0.0.1', GridTalk._socket.getsockname()[1])
@@ -119,6 +121,14 @@ try:
     lamps = frame()
     check(visible[status] == 0, 'status not cleared after recovery: ' + labels[status])
     check(lamps == {'Driver 43': red, me: green}, lamps)
+    # Aliases: names are logged (hex keys survive non-ASCII under 3.3) and an alias replaces the name.
+    logged = open(GridTalk._CONFIG_DIR + '/GridTalk_Aliases.ini', encoding='utf-8').read()
+    check(GridTalk._alias_key(me) in logged and '; Alias for ' + me in logged, logged)
+    with open(GridTalk._CONFIG_DIR + '/GridTalk_Aliases.ini', 'w', encoding='utf-8') as handle:
+        handle.write('[ALIASES]\n' + GridTalk._alias_key(me) + '=Simon ; x\n')
+    GridTalk._load_aliases()
+    frame()
+    check('Simon (you)' in [labels[row] for row in GridTalk._rows], [labels[row] for row in GridTalk._rows])
     sender.close()
     GridTalk.acShutdown()
     check(GridTalk._socket is None and not GridTalk._members, 'shutdown left state behind')
@@ -173,6 +183,7 @@ def main():
         raise SystemExit('Assetto Corsa not found; pass --ac-path with its installation folder.')
     log = root / 'build/ac-runtime.log'
     log.parent.mkdir(exist_ok=True)
+    log.unlink() if log.exists() else None  # a stale PASS must not mask a guest that failed to run
     runtime = ctypes.CDLL(str(game / 'system/x64/python33.dll'))
     runtime.Py_SetPath.argtypes = [ctypes.c_wchar_p]
     runtime.Py_SetPath(os.pathsep.join(str(p) for p in (

@@ -67,9 +67,25 @@ GridTalk*. Changes apply the next time you start a session.
 | Show title | Turn off to hide the "GridTalk" title text. The bar still appears when you hover the window, so you can drag it. |
 | Background opacity | 0% (fully transparent) to 100%. Only the grey window background changes; the name pills do not. Default 40%. |
 | Speaking hold | Keeps someone green for up to 10 extra seconds after they stop talking, so a short word is not missed. Default 0 (off). |
+| App scale | Resizes the overlay (names, lamps and spacing) from 50% to 200%. Default 100%. |
+
+### Aliases
+
+The *Aliases* page, shown after the main options, lists the people GridTalk
+has seen, so it grows as you meet people (up to 200). Type a name like "Simon"
+in someone's *Alias* box and the overlay shows that instead; leave it empty to
+keep their real name. To drop someone from the list, tick *Remove … from this
+list* and save; their alias goes with them. Content Manager has no buttons, so
+the removal happens when GridTalk next checks the file, within a second or two
+while a session is running or when the next one starts. Someone you remove is
+added again the next time you meet them.
+
+Aliases belong to a TeamSpeak display name, so if someone renames themselves
+they need a new alias. Once the list is full the oldest names without an alias
+are dropped.
 
 Without Content Manager, edit `apps\python\GridTalk\config\GridTalk.ini`
-(copy the lines from `GridTalk_defaults.ini`).
+(copy the lines from `GridTalk_defaults.ini`) or `GridTalk_Aliases.ini` in the same folder.
 
 ## Troubleshooting
 
