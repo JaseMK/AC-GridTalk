@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add the GridTalk relay for TeamSpeak 5 and 6: a small tray app
+  (`GridTalkRelay-<version>.exe`) that reads your channel from TeamSpeak's
+  Remote Apps API and sends it to the overlay. The overlay is unchanged. It
+  asks for approval in TeamSpeak once, follows the server tab whose microphone
+  is active, and reconnects when TeamSpeak restarts.
+
 ## 0.5.2 — 2026-10-12
 
 - Add an app scale option (50%–200%) that resizes the whole overlay.
