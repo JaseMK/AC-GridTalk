@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — 2026-10-12
 
 - Add options, editable in Content Manager under *Settings → Assetto Corsa →
   Python app settings → GridTalk* (applied the next time a session starts):
