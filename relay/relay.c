@@ -522,6 +522,36 @@ static int is_root_channel(const char* id) {
     return strcmp(id, "0") == 0;
 }
 
+static const char* flag_value(int node) {
+    static const char* const tokens[] = { "0", "1", "2", "3", "true", "false" };
+    static const char* const quoted[] = { "\"0\"", "\"1\"", "\"2\"", "\"3\"", "\"true\"", "\"false\"" };
+    size_t i;
+    if (node < 0) return "-";
+    if (doc.nodes[node].type == JSON_TRUE) return "true";
+    if (doc.nodes[node].type == JSON_FALSE) return "false";
+    if (doc.nodes[node].type == JSON_NULL) return "null";
+    if (doc.nodes[node].type == JSON_NUMBER || doc.nodes[node].type == JSON_STRING)
+        for (i = 0; i < sizeof(tokens) / sizeof(tokens[0]); ++i)
+            if (doc.nodes[node].length == strlen(tokens[i]) && memcmp(doc.nodes[node].text, tokens[i], doc.nodes[node].length) == 0)
+                return doc.nodes[node].type == JSON_STRING ? quoted[i] : tokens[i];
+    return "<other>";
+}
+
+static void dump_flags(const char* what, unsigned connection_id, unsigned id, int properties) {
+    char text[256];
+    size_t used = 0;
+    static const char* const flags[] = { "flagTalking", "inputDeactivated", "inputMuted", "inputHardware", "isMuted", "outputMuted" };
+    size_t i;
+    connection* c = find_connection(connection_id);
+    for (i = 0; i < sizeof(flags) / sizeof(flags[0]); ++i) {
+        int node = json_get(&doc, properties, flags[i]);
+        int value;
+        if (node >= 0 && json_boolean(&doc, node, &value))
+            append(text, sizeof(text), &used, " %s=%d", flags[i], value);
+    }
+    log_line("  %s: connection %u client %u%s%s", what, connection_id, id, c && c->self == id ? " (self)" : "", used ? text : "");
+}
+
 static void apply_properties(connection* c, member* m, int properties) {
     const char* nickname = json_string(&doc, json_get(&doc, properties, "nickname"));
     int value;
@@ -585,6 +615,11 @@ static void handle_auth(int payload) {
             load_clients(c, json_get(&doc, item, "clientInfos"));
         }
     }
+    if (dump_mode) {
+        long long current = -1;
+        json_integer(&doc, json_get(&doc, payload, "currentConnectionId"), &current);
+        log_line("  auth: %u server tab(s), current connection %lld", (unsigned)connection_count, current);
+    }
     link_state.state = LINK_READY;
     link_state.reported_failure = 0;
     roster_dirty = 1;
@@ -599,6 +634,9 @@ static void handle_talk(unsigned connection_id, int payload) {
             !json_integer(&doc, json_get(&doc, payload, "status"), &talk_status)) return;
     json_boolean(&doc, json_get(&doc, payload, "isWhisper"), &whisper);
     m = find_member(connection_id, id);
+    if (dump_mode)
+        log_line("  talk: connection %u client %u status %lld whisper %d%s", connection_id, id, talk_status, whisper,
+                 m ? (in_view(connection_id, m->channel) ? " (in view)" : "") : " (unknown client)");
     if (!m) return;
     m->talking = talk_status == 1;  /* 2 is "talking while disabled": nothing is transmitted */
     send_talk(m, whisper);
@@ -631,7 +669,9 @@ static void handle_moved(unsigned connection_id, int payload) {
 static void handle_properties(unsigned connection_id, int payload) {
     unsigned id;
     member* m;
-    if (!read_id(json_get(&doc, payload, "clientId"), &id) || !(m = find_member(connection_id, id))) return;
+    if (!read_id(json_get(&doc, payload, "clientId"), &id)) return;
+    if (dump_mode) dump_flags("properties", connection_id, id, json_get(&doc, payload, "properties"));
+    if (!(m = find_member(connection_id, id))) return;
     apply_properties(find_connection(connection_id), m, json_get(&doc, payload, "properties"));
     roster_dirty |= in_view(connection_id, m->channel);
 }
@@ -641,6 +681,7 @@ static void handle_connect_status(unsigned connection_id, int payload) {
     unsigned self;
     connection* c;
     if (!json_integer(&doc, json_get(&doc, payload, "status"), &value)) return;
+    if (dump_mode) log_line("  connection %u status %lld", connection_id, value);
     if (value == 0) {
         remove_connection(connection_id);
         roster_dirty = 1;
@@ -656,6 +697,9 @@ static void handle_self_property(unsigned connection_id, int payload) {
     connection* c = find_connection(connection_id);
     int value;
     member* m;
+    if (dump_mode && flag)
+        log_line("  self property: connection %u %.40s %s -> %s", connection_id, flag,
+                 flag_value(json_get(&doc, payload, "oldValue")), flag_value(json_get(&doc, payload, "newValue")));
     if (!flag || !c || !json_boolean(&doc, json_get(&doc, payload, "newValue"), &value)) return;
     if (strcmp(flag, "inputHardware") == 0) {
         if (value && !c->input) c->active_since = GetTickCount64();
@@ -721,7 +765,7 @@ static void handle_message(char* text, size_t length) {
     payload = json_get(&doc, 0, "payload");
     if (!type) return;
     if (dump_mode) {
-        log_line("TeamSpeak event: %s", type);
+        if (strcmp(type, "log") != 0) log_line("TeamSpeak event: %s", type);  /* TeamSpeak's own log is chatty */
         dump_shape(type);
     }
     read_id(json_get(&doc, payload, "connectionId"), &connection_id);
