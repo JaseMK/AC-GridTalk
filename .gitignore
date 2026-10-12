@@ -6,3 +6,5 @@ __pycache__/
 /dist/
 /.venv/
 /ac_app/GridTalk/config/GridTalk.ini
+/ac_app/GridTalk/config/Aliases.ini
+/ac_app/GridTalk/config/Aliases.ini.tmp

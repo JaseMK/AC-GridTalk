@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Add an app scale option (50%–200%) that resizes the whole overlay.
+- Add player aliases: GridTalk logs the names it has seen in `config\Aliases.ini`
+  (a page in Content Manager's Python app settings) and shows the alias you
+  type instead of the TeamSpeak name. Aliases follow the display name, so a
+  rename needs a new alias.
+- Test runner: remove the previous AC runtime log first, so a guest that fails
+  to start cannot be reported as a pass from a stale log.
+
 ## 0.5.0 — 2026-10-12
 
 - Add options, editable in Content Manager under *Settings → Assetto Corsa →

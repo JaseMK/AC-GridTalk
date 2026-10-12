@@ -70,6 +70,8 @@ spec = importlib.util.spec_from_file_location("GridTalk", root / "ac_app/GridTal
 app = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(app)
 app.PORT = options.port
+import tempfile
+app._CONFIG_DIR = tempfile.mkdtemp()  # keep the alias log out of the repository
 app.acMain("test")
 ui_calls = []
 def track_ui(name, original):

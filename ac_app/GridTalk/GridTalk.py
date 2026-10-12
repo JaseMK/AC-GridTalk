@@ -38,6 +38,11 @@ MAX_JSON_NODES = 256
 MAX_VISIBLE_ROWS = 24
 MAX_WINDOW_WIDTH = 420
 MAX_HOLD_SECONDS = 10.0
+MIN_UI_SCALE = 0.5
+MAX_UI_SCALE = 2.0
+MAX_ALIASES = 200
+MAX_ALIAS_CHARS = 64
+ALIAS_KEY_CHARS = 64
 SOURCE_RETENTION = 60.0
 SEQUENCE_RETENTION = 300.0
 MAX_INTEGER = 9007199254740991
@@ -70,11 +75,17 @@ _layout_key = None
 _visual_status = None
 _layout_width = 130
 _CONFIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config')
-_DEFAULT_SETTINGS = {'show_title_bar': True, 'background_opacity': 0.40, 'speaking_hold_seconds': 0.0}
+_DEFAULT_SETTINGS = {'show_title_bar': True, 'background_opacity': 0.40, 'speaking_hold_seconds': 0.0,
+                     'ui_scale': 1.0}
 _settings = dict(_DEFAULT_SETTINGS)
 _was_talking = set()
 _hold_until = {}
 _hold_deadline = None
+_aliases = {}
+_aliases_mtime = None
+_alias_write_failed = False
+_unrecorded = set()
+_recorded = set()
 
 
 def _read_ini(path):
@@ -102,29 +113,135 @@ def _load_settings():
         settings['show_title_bar'] = True
     elif shown in ('false', '0', 'off', 'no'):
         settings['show_title_bar'] = False
-    for key, name, maximum in (('BACKGROUND_OPACITY', 'background_opacity', 1.0),
-                               ('SPEAKING_HOLD_SECONDS', 'speaking_hold_seconds', MAX_HOLD_SECONDS)):
+    for key, name, minimum, maximum in (('BACKGROUND_OPACITY', 'background_opacity', 0.0, 1.0),
+                                        ('SPEAKING_HOLD_SECONDS', 'speaking_hold_seconds', 0.0, MAX_HOLD_SECONDS),
+                                        ('UI_SCALE', 'ui_scale', MIN_UI_SCALE, MAX_UI_SCALE)):
         try:
             number = float(values[key])
         except (KeyError, ValueError):
             continue
         if math.isfinite(number):
-            settings[name] = min(max(number, 0.0), maximum)
+            settings[name] = min(max(number, minimum), maximum)
     return settings
 
 
+def _px(size):
+    """A layout size in pixels at the user's UI scale."""
+    return max(1, int(round(size * _settings['ui_scale'])))
+
+
 def _top_margin():
-    """Space above the roster: the title bar's height, or a small gap without it."""
+    """Space above the roster: AC's title bar, which does not scale, or a small gap without it."""
     return 32 if _settings['show_title_bar'] else 6
+
+
+def _alias_key(name):
+    """An ini key for a name. Hex keeps any name legal for Content Manager and reversible."""
+    data = ' '.join(name.split())[:ALIAS_KEY_CHARS].encode('utf-8')
+    return 'n_' + ''.join('{:02x}'.format(byte) for byte in data)
+
+
+def _alias_label(key):
+    """The name behind a key, as Content Manager's label (which ends at '(' or ';')."""
+    try:
+        name = bytes(int(key[2 + i:4 + i], 16) for i in range(0, len(key) - 2, 2)).decode('utf-8')
+    except ValueError:
+        return key
+    return name.translate({ord('('): '[', ord(')'): ']', ord(';'): ',', 10: ' ', 13: ' '})
+
+
+def _read_aliases():
+    """Return ({key: alias}, [keys in file order]) from Aliases.ini."""
+    aliases, keys = {}, []
+    try:
+        with open(os.path.join(_CONFIG_DIR, 'Aliases.ini'), encoding='utf-8-sig', errors='replace') as handle:
+            for line in handle:
+                line = line.split(';', 1)[0].strip()
+                if line.lower().startswith('n_') and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip().lower()
+                    if key not in aliases:
+                        keys.append(key)
+                    aliases[key] = ' '.join(value.split())[:MAX_ALIAS_CHARS]
+    except (OSError, ValueError):
+        pass
+    return aliases, keys
+
+
+def _write_aliases(aliases, keys):
+    lines = ['[ALIASES]']
+    lines.extend('{}={} ; {}'.format(key, aliases[key], _alias_label(key)) for key in keys)
+    path = os.path.join(_CONFIG_DIR, 'Aliases.ini')
+    temporary = path + '.tmp'
+    with open(temporary, 'w', encoding='utf-8') as handle:
+        handle.write('\n'.join(lines) + '\n')
+    os.replace(temporary, path)
+
+
+def _load_aliases():
+    global _aliases, _aliases_mtime, _dirty
+    aliases = dict((key, value) for key, value in _read_aliases()[0].items() if value)
+    try:
+        _aliases_mtime = os.stat(os.path.join(_CONFIG_DIR, 'Aliases.ini')).st_mtime
+    except OSError:
+        _aliases_mtime = None
+    if aliases != _aliases:
+        _aliases = aliases
+        _dirty = True
+
+
+def _record_names(names):
+    """Add newly seen names to Aliases.ini so they can be given an alias in Content Manager."""
+    global _alias_write_failed
+    fresh = [name for name in names if name.strip() and _alias_key(name) not in _recorded]
+    if not fresh:
+        return  # Nothing new, so no file access on ordinary frames.
+    _recorded.update(_alias_key(name) for name in fresh)
+    aliases, keys = _read_aliases()  # Re-read first so edits made in Content Manager are kept.
+    added = False
+    for name in fresh:
+        key = _alias_key(name)
+        if key in aliases or key in _unrecorded:
+            continue
+        if len(keys) >= MAX_ALIASES:
+            droppable = [k for k in keys if not aliases[k]]
+            if not droppable:
+                _unrecorded.add(key)
+                continue
+            del aliases[droppable[0]]
+            keys.remove(droppable[0])
+        aliases[key] = ''
+        keys.append(key)
+        added = True
+    if not added:
+        return
+    try:
+        _write_aliases(aliases, keys)
+        _alias_write_failed = False
+    except OSError as exc:
+        if not _alias_write_failed:
+            ac.log('GridTalk could not save Aliases.ini: ' + str(exc))
+            _alias_write_failed = True
+    _load_aliases()
+
+
+def _shown_name(member):
+    name = ' '.join(member['name'].split())
+    return _aliases.get(_alias_key(name)) or name
 
 
 def acMain(ac_version):
     global _app, _status, _rows, _pills, _layout_key, _visual_status, _bind_failed, _settings
-    global _hold_deadline
+    global _hold_deadline, _order_key
     _settings = _load_settings()
+    _order_key = None
     _was_talking.clear()
     _hold_until.clear()
     _hold_deadline = None
+    _aliases.clear()
+    _unrecorded.clear()
+    _recorded.clear()
+    _load_aliases()
     _app = ac.newApp("GridTalk")
     if not _settings['show_title_bar']:
         ac.setTitle(_app, "")
@@ -140,8 +257,8 @@ def acMain(ac_version):
         _textures[name] = ac.newTexture("apps/python/GridTalk/assets/" + name + ".png")
     ac.addRenderCallback(_app, _draw_backgrounds)
     _status = ac.addLabel(_app, "Waiting for voice sender")
-    ac.setPosition(_status, 10, _top_margin())
-    ac.setFontSize(_status, 12)
+    ac.setPosition(_status, _px(10), _top_margin())
+    ac.setFontSize(_status, _px(12))
     _rows = []
     _pills = []
     _layout_key = None
@@ -494,15 +611,18 @@ def _render(now):
         status = "" if _members else "Channel is empty"
     if len(_members) > MAX_VISIBLE_ROWS:
         status = 'Showing {} of {} users'.format(MAX_VISIBLE_ROWS, len(_members)) if not status else status
-    status = _clip_text(status, 12, MAX_WINDOW_WIDTH - 20)
+    status = _clip_text(status, _px(12), _px(MAX_WINDOW_WIDTH - 20))
     if not _dirty and status == _visual_status:
         return
-    order_key = tuple((key, member['name'], member['self']) for key, member in _members.items())
+    _record_names([member['name'] for member in _members.values()])
+    shown = dict((key, _shown_name(member)) for key, member in _members.items())
+    order_key = tuple((key, shown[key], member['self']) for key, member in _members.items())
     if order_key != _order_key:
-        _ordered_members = sorted(_members, key=lambda key: (_members[key]['name'].lower(), key))[:MAX_VISIBLE_ROWS]
+        _ordered_members = sorted(_members, key=lambda key: (shown[key].lower(), key))[:MAX_VISIBLE_ROWS]
         _order_key = order_key
     names = [_members[key] for key in _ordered_members]
-    layout_key = (status, tuple((m["source"], m["client_id"], m["name"], m["self"]) for m in names))
+    layout_key = (status, tuple((m["source"], m["client_id"], shown[key], m["self"])
+                                for key, m in zip(_ordered_members, names)))
     layout_changed = layout_key != _layout_key
     if status != _visual_status:
         ac.setText(_status, status)
@@ -520,17 +640,17 @@ def _render(now):
             ac.setBackgroundOpacity(background, 0)
         _pills.append(backgrounds)
         label = ac.addLabel(_app, "")
-        ac.setFontSize(label, 14)
+        ac.setFontSize(label, _px(14))
         ac.setFontColor(label, 1, 1, 1, 1)
         _rows.append(label)
-    top = _top_margin() + (22 if status else 0)
+    top = _top_margin() + (_px(22) if status else 0)
     if layout_changed:
-        texts = [" ".join((m["name"] or "Client " + str(m["client_id"])).split()) +
-                 (" (you)" if m["self"] else "") for m in names]
-        texts = [_clip_text(text, 14, (MAX_WINDOW_WIDTH - 52) / 1.12) for text in texts]
-        _layout_width = max([130, _text_width(status, 12) + 20] +
-                            [int(_text_width(text, 14) * 1.12) + 52 for text in texts])
-    _layout_width = min(_layout_width, MAX_WINDOW_WIDTH)
+        texts = [(shown[key] or "Client " + str(m["client_id"])) + (" (you)" if m["self"] else "")
+                 for key, m in zip(_ordered_members, names)]
+        texts = [_clip_text(text, _px(14), _px(MAX_WINDOW_WIDTH - 52) / 1.12) for text in texts]
+        _layout_width = max([_px(130), _text_width(status, _px(12)) + _px(20)] +
+                            [int(_text_width(text, _px(14)) * 1.12) + _px(52) for text in texts])
+    _layout_width = min(_layout_width, _px(MAX_WINDOW_WIDTH))
     width = _layout_width
     row_states = []
     for index, label in enumerate(_rows):
@@ -544,28 +664,29 @@ def _render(now):
             speaking = (member["talking"] and not stale) or (_ordered_members[index] in lit)
             if layout_changed:
                 ac.setText(label, texts[index])
-                ac.setPosition(label, 36, top + index * 28 + 3)
+                ac.setPosition(label, _px(36), top + index * _px(28) + _px(3))
             row_states.append(speaking)
             weight = 1 if speaking else 0
             if _font_weights.get(label) != weight:
                 ac.setCustomFont(label, "Arial", 0, weight)
-                ac.setFontSize(label, 14)
+                ac.setFontSize(label, _px(14))
                 _font_weights[label] = weight
     if layout_changed:
-        ac.setSize(_app, width, top + len(names) * 28 + 4)
+        ac.setSize(_app, width, top + len(names) * _px(28) + _px(4))
     shapes = []
     for index, speaking in enumerate(row_states):
-        y = top + index * 28
+        y = top + index * _px(28)
         state = "active" if speaking else "idle"
         for control, part, x, w in zip(_pills[index], ("left", "middle", "right"),
-                                       (6, 18, width - 18), (12, width - 36, 12)):
+                                       (_px(6), _px(18), width - _px(18)),
+                                       (_px(12), width - _px(36), _px(12))):
             if layout_changed:
                 ac.setPosition(control, x, y)
-                ac.setSize(control, w, 24)
+                ac.setSize(control, w, _px(24))
             if _pill_states.get(control) != state:
                 ac.setBackgroundTexture(control, "apps/python/GridTalk/assets/" + state + "_" + part + ".png")
                 _pill_states[control] = state
-        shapes.append((11, y + 2, 20, 20, _textures["green" if speaking else "red"]))
+        shapes.append((_px(11), y + _px(2), _px(20), _px(20), _textures["green" if speaking else "red"]))
     _shapes = shapes
     _layout_key = layout_key
     _visual_status = status
@@ -624,6 +745,15 @@ def _text_width(text, font_size):
     return int(units * font_size + 8)
 
 
+def _reload_aliases_if_changed():
+    try:
+        mtime = os.stat(os.path.join(_CONFIG_DIR, 'Aliases.ini')).st_mtime
+    except OSError:
+        mtime = None
+    if mtime != _aliases_mtime:
+        _load_aliases()
+
+
 def acUpdate(delta_t):
     global _dirty, _last_health, _next_error_log, _suppressed_errors
     now = time.monotonic()
@@ -662,6 +792,8 @@ def acUpdate(delta_t):
     _refresh_sources(now)
     if _hold_deadline is not None and now >= _hold_deadline:
         _dirty = True
+    if now - _last_health >= 1.0:
+        _reload_aliases_if_changed()
     if _dirty or now - _last_health >= 1.0:
         _render(now)
         _dirty = False

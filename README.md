@@ -67,9 +67,22 @@ GridTalk*. Changes apply the next time you start a session.
 | Show title | Turn off to hide the "GridTalk" title text. The bar still appears when you hover the window, so you can drag it. |
 | Background opacity | 0% (fully transparent) to 100%. Only the grey window background changes; the name pills do not. Default 40%. |
 | Speaking hold | Keeps someone green for up to 10 extra seconds after they stop talking, so a short word is not missed. Default 0 (off). |
+| App scale | Resizes the overlay (names, lamps and spacing) from 50% to 200%. Default 100%. |
+
+### Aliases
+
+GridTalk keeps a list of every name it has seen, up to 200, in *Python app
+settings → Aliases*. Type a name like "Simon" next to someone's TeamSpeak name
+and the overlay shows that instead; leave it empty to keep their real name. The
+page lists a name once you have been in a session with that person, and
+changes are picked up within a second or two of saving.
+
+Aliases belong to a TeamSpeak display name, so if someone renames themselves
+they need a new alias. Once the list is full the oldest names without an alias
+are dropped.
 
 Without Content Manager, edit `apps\python\GridTalk\config\GridTalk.ini`
-(copy the lines from `GridTalk_defaults.ini`).
+(copy the lines from `GridTalk_defaults.ini`) or `Aliases.ini` in the same folder.
 
 ## Troubleshooting
 
