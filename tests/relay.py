@@ -106,8 +106,8 @@ class Peer:
     def event(self, kind, **payload):
         self.send(json.dumps({'type': kind, 'payload': payload}).encode('utf-8'))
 
-    def close(self):
-        self.send(struct.pack('>H', 1001), opcode=8)
+    def close(self, code=1001):
+        self.send(struct.pack('>H', code), opcode=8)
         self.conn.close()
 
 
@@ -371,17 +371,51 @@ try:
     auth = peer.message()
     assert auth['payload']['content'] == {'apiKey': 'KEY-1'}, auth
 
-    # A refused saved key is forgotten, so the next attempt asks the user again.
-    peer.conn.close()
+    # Losing the connection during sign-in keeps the saved key: a dropped socket, or
+    # TeamSpeak closing because it is shutting down (1001) or restarting (1012).
+    for goodbye in (None, 1001, 1012):
+        started = time.monotonic()
+        if goodbye is None:
+            peer.conn.close()
+        else:
+            peer.close(goodbye)
+        peer = accept(server)
+        auth = peer.message()
+        assert auth['payload']['content'] == {'apiKey': 'KEY-1'}, (goodbye, auth)
+        assert time.monotonic() - started < 1.2, 'a lost connection reconnects at the normal pace'
+    assert 'api_key=KEY-1' in config.read_text(encoding='utf-8')
+
+    # TeamSpeak deliberately closing during sign-in is a refusal: the key is
+    # forgotten, so the next attempt asks the user again, after a longer wait.
+    started = time.monotonic()
+    peer.close(1008)
     peer = accept(server)
     auth = peer.message()
     assert auth['payload']['content'] == {'apiKey': ''}, auth
+    assert time.monotonic() - started >= 1.4, 'a refusal backs off'
     assert 'api_key=KEY-1' not in config.read_text(encoding='utf-8')
-    peer.event('auth', apiKey='KEY-2', connections=[{
-        'id': 3, 'clientId': 5, 'channelInfos': {'rootChannels': [channel(30, 'Back again')], 'subChannels': {}},
-        'clientInfos': [client(5, 30, ME)]}])
+    second_server = [{'id': 3, 'clientId': 5,
+                      'channelInfos': {'rootChannels': [channel(30, 'Back again')], 'subChannels': {}},
+                      'clientInfos': [client(5, 30, ME)]}]
+    peer.event('auth', apiKey='KEY-2', connections=second_server)
     roster = inbox.roster(lambda r: r['connected'], 'roster after signing in again')
     assert roster['server'] == '3' and names(roster) == {5: ME}, roster
+
+    # An error reply (TeamSpeak 6 adds a status object) refuses the saved key too.
+    peer.close()
+    peer = accept(server)
+    auth = peer.message()
+    assert auth['payload']['content'] == {'apiKey': 'KEY-2'}, auth
+    peer.send(json.dumps({'type': 'auth', 'status': {'code': 1, 'message': 'invalid api key'},
+                          'payload': {'apiKey': '', 'connections': []}}).encode())
+    peer = accept(server)
+    auth = peer.message()
+    assert auth['payload']['content'] == {'apiKey': ''}, auth
+    assert any('TeamSpeak refused GridTalk: invalid api key (code 1)' in line for line in log), log[-5:]
+    peer.send(json.dumps({'type': 'auth', 'status': {'code': 0, 'message': 'ok'},
+                          'payload': {'apiKey': 'KEY-3', 'connections': second_server}}).encode())
+    roster = inbox.roster(lambda r: r['connected'], 'roster after approving again')
+    assert 'api_key=KEY-3' in config.read_text(encoding='utf-8')
 
     # --stop ends a running relay cleanly: a close frame, then a reset.
     inbox.mark()
@@ -478,6 +512,7 @@ assert len(shown) == 23 and shown[5] == ME and shown[9] == 'Renamed', shown
 assert app._connected
 
 print('PASS: relay handshake, approval hint and saved key, talk/move/join/leave/rename, fragments and pings')
-print('PASS: pagination, active-tab switching, disconnects, reconnect, refused key, --stop, schema and receiver replay')
+print('PASS: pagination, active-tab switching, disconnects, reconnect, --stop, schema and receiver replay')
+print('PASS: saved key kept on dropped/shutdown/restart closes; forgotten after a refusal or error reply, with backoff')
 print('PASS: start with Windows on/off, icon and version resources, tray mode start and --stop')
 print('PASS: relay peak working set {:.1f} MB, private {:.1f} MB, CPU {:.2f} s over the run'.format(peak_mb, private_mb, cpu))

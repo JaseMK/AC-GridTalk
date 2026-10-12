@@ -21,8 +21,9 @@ typedef struct {
 } json_doc;
 
 /* Parses length bytes of text, which must be followed by a NUL. Strings are
-   decoded into the same buffer. The root is node 0. Returns 0, or -1 for
-   malformed input, nesting deeper than 64 levels, or more than limit nodes. */
+   decoded into the same buffer. The root is node 0. Returns 0, or -1 for input
+   that is not strict RFC 8259 JSON (including unescaped control characters and
+   malformed numbers), nesting deeper than 64 levels, or more than limit nodes. */
 int json_parse(json_doc* doc, char* text, size_t length);
 void json_release(json_doc* doc);
 

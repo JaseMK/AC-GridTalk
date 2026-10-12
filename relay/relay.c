@@ -35,7 +35,8 @@
 #define ID_CHARS 32
 #define HANDSHAKE_TIMEOUT_MS 5000
 #define APPROVAL_HINT_MS 1500
-#define DENIED_RETRY_FACTOR 5
+#define DENIED_RETRY_FACTOR 5          /* first wait after TeamSpeak refuses GridTalk */
+#define MAX_DENIED_RETRY_MS 300000      /* later refusals double the wait, up to five minutes */
 #define KEEP_BUFFER (1u << 20)          /* larger buffers are released after use */
 #define STATUS_MESSAGE (WM_APP + 1)
 #define TRAY_MESSAGE (WM_APP + 2)
@@ -93,6 +94,9 @@ static struct {
     size_t message_length, message_capacity;
     int message_open;
     int reported_failure;
+    int close_code;             /* from TeamSpeak's close frame, or 0 if the connection just dropped */
+    int rejected;               /* TeamSpeak answered the sign-in with an error */
+    unsigned refusals;          /* consecutive refusals, for the backoff */
 } link_state = { INVALID_SOCKET };
 
 static member* members;
@@ -600,9 +604,23 @@ static void load_clients(connection* c, int list) {
     }
 }
 
-static void handle_auth(int payload) {
+static void handle_auth(int payload, int result) {
     const char* key = json_string(&doc, json_get(&doc, payload, "apiKey"));
     int list = json_get(&doc, payload, "connections"), item;
+    long long code = 0;
+    /* TeamSpeak 6 adds {"status":{"code":N,"message":...}}. Only an error code with
+       no key is a refusal, so an unfamiliar success code cannot lose the approval. */
+    if (json_integer(&doc, json_get(&doc, result, "code"), &code) && code != 0 && (!key || !*key)) {
+        char reason[121];
+        const char* message = json_string(&doc, json_get(&doc, result, "message"));
+        size_t i;
+        for (i = 0; message && message[i] && i < sizeof(reason) - 1; ++i)
+            reason[i] = (unsigned char)message[i] < 0x20 ? ' ' : message[i];
+        reason[i] = 0;
+        log_line("TeamSpeak refused GridTalk: %s (code %lld)", i ? reason : "no reason given", code);
+        link_state.rejected = 1;
+        return;
+    }
     if (key && *key && strcmp(key, api_key) != 0 && printable_key(key)) {
         strcpy_s(api_key, sizeof(api_key), key);
         save_config();
@@ -626,6 +644,7 @@ static void handle_auth(int payload) {
     }
     link_state.state = LINK_READY;
     link_state.reported_failure = 0;
+    link_state.refusals = 0;
     roster_dirty = 1;
 }
 
@@ -776,7 +795,7 @@ static void handle_message(char* text, size_t length) {
         dump_shape(type);
     }
     read_id(json_get(&doc, payload, "connectionId"), &connection_id);
-    if (strcmp(type, "auth") == 0) handle_auth(payload);
+    if (strcmp(type, "auth") == 0) handle_auth(payload, json_get(&doc, 0, "status"));
     else if (link_state.state != LINK_READY) return;
     else if (strcmp(type, "talkStatusChanged") == 0) handle_talk(connection_id, payload);
     else if (strcmp(type, "clientMoved") == 0) handle_moved(connection_id, payload);
@@ -902,13 +921,26 @@ static void link_close(const char* reason) {
         link_state.socket = INVALID_SOCKET;
     }
     if (was == LINK_AUTH) {
-        /* TeamSpeak closes the socket when the user declines, or when a stored
-           key was revoked. Forget the key so the next attempt asks again. */
-        if (link_state.sent_stored_key) {
-            api_key[0] = 0;
-            save_config();
+        /* A refusal is an error reply, or TeamSpeak deliberately closing the socket
+           (the user declined, or the saved key was revoked). A dropped connection, or
+           a close because TeamSpeak is shutting down or restarting, is not: the saved
+           approval is kept and the relay reconnects as usual. */
+        int code = link_state.close_code;
+        if (link_state.rejected || (code && code != 1001 && code != 1011 && code != 1012 && code != 1013)) {
+            unsigned long long wait = (unsigned long long)retry_ms * DENIED_RETRY_FACTOR;
+            unsigned i;
+            for (i = 1; i < link_state.refusals + 1 && wait < MAX_DENIED_RETRY_MS; ++i) wait *= 2;
+            delay = (unsigned)(wait < MAX_DENIED_RETRY_MS ? wait : MAX_DENIED_RETRY_MS);
+            ++link_state.refusals;
+            reason = "TeamSpeak did not approve GridTalk";
+            if (link_state.sent_stored_key) {
+                api_key[0] = 0;
+                save_config();
+                reason = "TeamSpeak refused the saved approval; it will ask again";
+            }
+        } else if (link_state.sent_stored_key) {
+            reason = "Lost the connection to TeamSpeak while signing in; keeping the saved approval";
         }
-        delay *= DENIED_RETRY_FACTOR;
     }
     if (was >= LINK_HANDSHAKE || !link_state.reported_failure) log_line("%s", reason);
     link_state.reported_failure = 1;
@@ -941,6 +973,8 @@ static void link_start(void) {
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     link_state.socket = s;
     link_state.state = LINK_CONNECTING;
+    link_state.close_code = 0;
+    link_state.rejected = 0;
     link_state.since = GetTickCount64();
     if (connect(s, (const struct sockaddr*)&address, sizeof(address)) == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)
         link_close("Could not open a connection to TeamSpeak");
@@ -1059,6 +1093,7 @@ static int read_frames(void) {
         offset += header + (size_t)length;
         switch (opcode) {
         case 0x8:  /* close: echo the status code, then drop */
+            link_state.close_code = length >= 2 ? payload[0] << 8 | payload[1] : 1005;  /* 1005: no code given */
             ws_send(0x8, (const char*)payload, length >= 2 ? 2 : 0);
             return 0;
         case 0x9:  /* ping */
@@ -1080,6 +1115,7 @@ static int read_frames(void) {
                 link_state.message[link_state.message_length] = 0;
                 handle_message(link_state.message, link_state.message_length);
                 link_state.message_length = 0;
+                if (link_state.rejected) return 0;
             }
             break;
         default:
@@ -1125,12 +1161,12 @@ static void link_receive(int closing) {
         }
     }
     if (link_state.state >= LINK_AUTH && !read_frames()) {
-        link_close(link_state.state == LINK_AUTH ? "TeamSpeak did not approve GridTalk" : "TeamSpeak closed the connection");
+        link_close("TeamSpeak closed the connection");
         return;
     }
     if (roster_dirty && link_state.state == LINK_READY) send_snapshot();
     shrink_buffers();
-    if (closing) link_close(link_state.state == LINK_AUTH ? "TeamSpeak did not approve GridTalk" : "TeamSpeak closed the connection");
+    if (closing) link_close("TeamSpeak closed the connection");
 }
 
 /* ---- main loop -------------------------------------------------------------- */

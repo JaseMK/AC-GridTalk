@@ -82,6 +82,7 @@ static int parse_string(parser* s, const char** text, size_t* length) {
         if (s->p >= s->end) return 0;
         c = *s->p++;
         if (c == '"') break;
+        if ((unsigned char)c < 0x20) return 0;  /* control characters must be escaped */
         if (c != '\\') {
             *out++ = c;
             continue;
@@ -117,6 +118,13 @@ static int parse_string(parser* s, const char** text, size_t* length) {
     *text = start;
     *length = (size_t)(out - start);
     return 1;
+}
+
+/* Consumes one or more digits; returns 0 if there were none. */
+static int skip_digits(parser* s) {
+    char* start = s->p;
+    while (s->p < s->end && *s->p >= '0' && *s->p <= '9') ++s->p;
+    return s->p != start;
 }
 
 static int parse_literal(parser* s, const char* word, int type) {
@@ -184,16 +192,20 @@ static int parse_value(parser* s) {
     case 'f': return parse_literal(s, "false", JSON_FALSE);
     case 'n': return parse_literal(s, "null", JSON_NULL);
     default: {
+        /* RFC 8259: -? (0 | [1-9][0-9]*) (. [0-9]+)? ([eE] [+-]? [0-9]+)? */
         char* start = s->p;
-        int digits = 0;
         if (*s->p == '-') ++s->p;
-        while (s->p < s->end) {
-            char c = *s->p;
-            if (c >= '0' && c <= '9') ++digits;
-            else if (c != '.' && c != 'e' && c != 'E' && c != '+' && c != '-') break;
+        if (s->p < s->end && *s->p == '0') ++s->p;
+        else if (!skip_digits(s)) return -1;
+        if (s->p < s->end && *s->p == '.') {
             ++s->p;
+            if (!skip_digits(s)) return -1;
         }
-        if (!digits) return -1;
+        if (s->p < s->end && (*s->p == 'e' || *s->p == 'E')) {
+            ++s->p;
+            if (s->p < s->end && (*s->p == '+' || *s->p == '-')) ++s->p;
+            if (!skip_digits(s)) return -1;
+        }
         node = add_node(s, JSON_NUMBER);
         if (node < 0) return -1;
         s->doc->nodes[node].text = start;

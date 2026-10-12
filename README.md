@@ -157,7 +157,8 @@ GridTalk TS6 Relay (TeamSpeak 5/6):
   grey otherwise; its tooltip says why. Its log is
   `%APPDATA%\GridTalk\relay.log`; it is rewritten each time the relay starts.
 - If you declined the TeamSpeak prompt, or removed GridTalk from
-  *Settings → Remote Apps*, restart the relay to be asked again.
+  *Settings → Remote Apps*, the relay asks again after a while, waiting longer
+  each time (up to five minutes). Restart it to be asked straight away.
 - With several server tabs open, the relay follows the tab whose microphone is
   active.
 
