@@ -1,5 +1,5 @@
-/* GridTalk relay: forwards TeamSpeak 5/6 Remote Apps events to the GridTalk
-   overlay as protocol v2 UDP packets (see docs/SENDER_PROTOCOL.md).
+/* GridTalk TS6 Relay (GridTalk-TS6-Relay.exe): forwards TeamSpeak 5/6 Remote
+   Apps events to the GridTalk overlay as protocol v2 UDP packets (see docs/SENDER_PROTOCOL.md).
 
    One thread does all network work. It sleeps until a socket event, the
    one-second snapshot tick, a reconnect deadline, or a stop request. */
@@ -41,16 +41,16 @@
 #define TRAY_MESSAGE (WM_APP + 2)
 #define MENU_EXIT 1
 #define MENU_AUTOSTART 2
-#define RUN_VALUE L"GridTalk relay"
+#define RUN_VALUE L"GridTalk TS6 Relay"
 
 enum { STATUS_WAITING, STATUS_APPROVAL, STATUS_NO_SERVER, STATUS_LIVE };
 /* Release packaging checks this text for the version and the default port. */
-static const char build_info[] = "GridTalk relay " GRIDTALK_VERSION " (default UDP 127.0.0.1:" STRINGIFY(GRIDTALK_UDP_PORT) ")";
+static const char build_info[] = "GridTalk TS6 Relay " GRIDTALK_VERSION " (default UDP 127.0.0.1:" STRINGIFY(GRIDTALK_UDP_PORT) ")";
 static const wchar_t* const status_text[] = {
-    L"GridTalk relay: waiting for TeamSpeak",
-    L"GridTalk relay: allow GridTalk in TeamSpeak",
-    L"GridTalk relay: TeamSpeak is not on a server",
-    L"GridTalk relay: sending your channel to GridTalk",
+    L"GridTalk TS6 Relay: waiting for TeamSpeak",
+    L"GridTalk TS6 Relay: allow GridTalk in TeamSpeak",
+    L"GridTalk TS6 Relay: TeamSpeak is not on a server",
+    L"GridTalk TS6 Relay: sending your channel to GridTalk",
 };
 static const char* const status_log[] = {
     "Waiting for TeamSpeak (Remote Apps on port %u)",
@@ -185,7 +185,7 @@ static void save_config(void) {
         log_line("Could not save the TeamSpeak approval key");
         return;
     }
-    fprintf(file, "; Written by the GridTalk relay. Delete this file to ask TeamSpeak for approval again.\n");
+    fprintf(file, "; Written by GridTalk TS6 Relay. Delete this file to ask TeamSpeak for approval again.\n");
     fprintf(file, "api_key=%s\n", api_key);
     fclose(file);
 }
@@ -1281,7 +1281,7 @@ static LRESULT CALLBACK tray_proc(HWND window, UINT message, WPARAM wparam, LPAR
     if (message == WM_COMMAND && LOWORD(wparam) == MENU_AUTOSTART) {
         int enable = !autostart_enabled();
         if (set_autostart(enable)) log_line(enable ? "Will start with Windows" : "Will no longer start with Windows");
-        else MessageBoxW(window, L"Could not change the Windows startup setting.", L"GridTalk relay", MB_OK | MB_ICONWARNING);
+        else MessageBoxW(window, L"Could not change the Windows startup setting.", L"GridTalk TS6 Relay", MB_OK | MB_ICONWARNING);
         return 0;
     }
     if (message == WM_COMMAND && LOWORD(wparam) == MENU_EXIT) {
@@ -1363,9 +1363,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command_line, 
             autostart = wcscmp(argv[++i], L"on") == 0;
         else if (wcscmp(argv[i], L"--run-key") == 0 && i + 1 < argc) wcscpy_s(run_key, 200, argv[++i]);
         else {
-            MessageBoxW(NULL, L"Usage: GridTalkRelay [--console] [--dump] [--stop] [--start-with-windows on|off]\n"
-                        L"                     [--ts-port N] [--udp-port N] [--config FILE]",
-                        L"GridTalk relay", MB_OK | MB_ICONINFORMATION);
+            MessageBoxW(NULL, L"Usage: GridTalk-TS6-Relay [--console] [--dump] [--stop] [--start-with-windows on|off]\n"
+                        L"                           [--ts-port N] [--udp-port N] [--config FILE]",
+                        L"GridTalk TS6 Relay", MB_OK | MB_ICONINFORMATION);
             return 2;
         }
     }
@@ -1392,7 +1392,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command_line, 
     swprintf_s(name, 64, L"Local\\GridTalkRelay-%u", (unsigned)udp_port);
     single = CreateMutexW(NULL, FALSE, name);
     if (!stop_event || !single || GetLastError() == ERROR_ALREADY_EXISTS) {
-        log_line("Another GridTalk relay is already running");
+        log_line("Another GridTalk TS6 Relay is already running");
         return 0;
     }
     if (WSAStartup(MAKEWORD(2, 2), &wsa)) return 1;
@@ -1416,7 +1416,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command_line, 
         window_class.lpszClassName = L"GridTalkRelayTray";
         RegisterClassW(&window_class);
         taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
-        tray_window = CreateWindowExW(0, window_class.lpszClassName, L"GridTalk relay", 0, 0, 0, 0, 0, NULL, NULL, instance, NULL);
+        tray_window = CreateWindowExW(0, window_class.lpszClassName, L"GridTalk TS6 Relay", 0, 0, 0, 0, 0, NULL, NULL, instance, NULL);
         if (!tray_window) return 1;
         load_icons();
         tray_icon(NIM_ADD);

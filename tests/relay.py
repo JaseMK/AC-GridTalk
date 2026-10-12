@@ -32,7 +32,7 @@ ME = 'Jasé 日本 "quoted" \\ back'
 parser = argparse.ArgumentParser()
 parser.add_argument('--build-dir', default='build-tests')
 options = parser.parse_args()
-exe = root / options.build_dir / 'Release' / 'GridTalkRelay.exe'
+exe = root / options.build_dir / 'Release' / 'GridTalk-TS6-Relay.exe'
 assert exe.is_file(), 'build the relay first: {}'.format(exe)
 
 
@@ -406,12 +406,12 @@ test_key = r'Software\GridTalkRelayTest\Run'
 try:
     subprocess.run([str(exe), '--run-key', test_key, '--start-with-windows', 'on'], check=True, timeout=10)
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, test_key) as key:
-        assert winreg.QueryValueEx(key, 'GridTalk relay') == ('"{}"'.format(exe.resolve()), winreg.REG_SZ)
+        assert winreg.QueryValueEx(key, 'GridTalk TS6 Relay') == ('"{}"'.format(exe.resolve()), winreg.REG_SZ)
     subprocess.run([str(exe), '--run-key', test_key, '--start-with-windows', 'off'], check=True, timeout=10)
     subprocess.run([str(exe), '--run-key', test_key, '--start-with-windows', 'off'], check=True, timeout=10)  # already off
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, test_key) as key:
         try:
-            winreg.QueryValueEx(key, 'GridTalk relay')
+            winreg.QueryValueEx(key, 'GridTalk TS6 Relay')
             raise AssertionError('Run entry was not removed')
         except FileNotFoundError:
             pass

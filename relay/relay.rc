@@ -18,12 +18,12 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "FileDescription", "GridTalk relay for TeamSpeak 5 and 6"
+            VALUE "FileDescription", "GridTalk TS6 Relay (TeamSpeak 5 and 6 only; TeamSpeak 3 uses the plugin)"
             VALUE "FileVersion", GRIDTALK_VERSION
-            VALUE "InternalName", "GridTalkRelay"
+            VALUE "InternalName", "GridTalk-TS6-Relay"
             VALUE "LegalCopyright", "MIT licence"
-            VALUE "OriginalFilename", "GridTalkRelay.exe"
-            VALUE "ProductName", "GridTalk"
+            VALUE "OriginalFilename", "GridTalk-TS6-Relay.exe"
+            VALUE "ProductName", "GridTalk TS6 Relay"
             VALUE "ProductVersion", GRIDTALK_VERSION
         END
     END

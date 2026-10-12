@@ -30,13 +30,13 @@ if(MSVC)
   target_compile_options(assetto_corsa_notifier PRIVATE /W4)
 endif()
 
-# TeamSpeak 5/6 relay: a standalone tray app, so link the C runtime statically.
+# GridTalk TS6 Relay for TeamSpeak 5/6: a standalone tray app, so link the C runtime statically.
 add_executable(gridtalk_relay WIN32 relay/relay.c relay/json.c relay/relay.rc)
 target_compile_definitions(gridtalk_relay PRIVATE GRIDTALK_UDP_PORT=${GRIDTALK_UDP_PORT} GRIDTALK_VERSION="${PROJECT_VERSION}"
                            GRIDTALK_VERSION_MAJOR=${PROJECT_VERSION_MAJOR} GRIDTALK_VERSION_MINOR=${PROJECT_VERSION_MINOR}
                            GRIDTALK_VERSION_PATCH=${PROJECT_VERSION_PATCH} UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS)
 target_link_libraries(gridtalk_relay PRIVATE ws2_32 bcrypt shell32 user32 advapi32)
-set_target_properties(gridtalk_relay PROPERTIES OUTPUT_NAME GridTalkRelay
+set_target_properties(gridtalk_relay PROPERTIES OUTPUT_NAME GridTalk-TS6-Relay
                       MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 if(MSVC)
   target_compile_options(gridtalk_relay PRIVATE /W4)

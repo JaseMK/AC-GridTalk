@@ -7,7 +7,7 @@
 Writes to dist/:
   AssettoCorsaNotifier-<version>.ts3_plugin  TeamSpeak installs it on double-click
   GridTalk-<version>.zip                     extract into the Assetto Corsa folder
-  GridTalkRelay-<version>.exe                TeamSpeak 5/6 relay (standalone tray app)
+  GridTalk-TS6-Relay-<version>.exe           TeamSpeak 5/6 relay (standalone tray app)
 and the GitHub release notes (this version's CHANGELOG.md section) to
 build/release-notes.md.
 """
@@ -34,14 +34,26 @@ def version():
     return cmake
 
 
+INSTALL_NOTES = """**Install:** everyone needs `GridTalk-<version>.zip` (the Assetto Corsa app), plus
+**one** TeamSpeak connector:
+
+| Your TeamSpeak | Connector to download |
+| --- | --- |
+| TeamSpeak 3 | `AssettoCorsaNotifier-<version>.ts3_plugin` (TeamSpeak plugin) |
+| TeamSpeak 5 or 6 | `GridTalk-TS6-Relay-<version>.exe` (small tray app) |
+
+TeamSpeak 3 users don't need the TS6 Relay. Step-by-step instructions are in
+the [README](https://github.com/JaseMK/AC-GridTalk#install).
+"""
+
+
 def release_notes(release):
     changelog = (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
     section = re.search(r'^## ' + re.escape(release) + r' .*?\n(.*?)(?=^## |\Z)',
                         changelog, re.MULTILINE | re.DOTALL)
     if not section or not section.group(1).strip():
         raise SystemExit('CHANGELOG.md has no entry for {}; add one before releasing.'.format(release))
-    return (section.group(1).strip() + '\n\n**Install:** download both files below and follow the '
-            '[README](https://github.com/JaseMK/AC-GridTalk#install).\n')
+    return (section.group(1).strip() + '\n\n' + INSTALL_NOTES.replace('<version>', release))
 
 
 def check_dll(path, release):
@@ -65,7 +77,7 @@ def check_relay(path, release):
     pe = struct.unpack_from('<I', data, 0x3c)[0]
     if data[pe:pe + 4] != b'PE\0\0' or struct.unpack_from('<H', data, pe + 4)[0] != 0x8664:
         raise SystemExit('{} is not an x64 executable; configure CMake with -A x64.'.format(path))
-    marker = 'GridTalk relay {} (default UDP 127.0.0.1:{})'.format(release, PORT).encode()
+    marker = 'GridTalk TS6 Relay {} (default UDP 127.0.0.1:{})'.format(release, PORT).encode()
     if marker not in data:
         raise SystemExit('{} is not a {} build for port {}; rebuild it without -DGRIDTALK_UDP_PORT.'.format(
             path, release, PORT))
@@ -94,7 +106,7 @@ def main():
     files = app_files()
     dll = ROOT / args.build_dir / 'Release' / 'assetto_corsa_notifier.dll'
     check_dll(dll, release)
-    relay = ROOT / args.build_dir / 'Release' / 'GridTalkRelay.exe'
+    relay = ROOT / args.build_dir / 'Release' / 'GridTalk-TS6-Relay.exe'
     check_relay(relay, release)
     notes_path = ROOT / 'build' / 'release-notes.md'
     notes_path.parent.mkdir(exist_ok=True)
@@ -120,7 +132,7 @@ def main():
         for path in files:
             archive.write(str(path), 'apps/python/GridTalk/' + path.relative_to(APP).as_posix())
 
-    relay_download = output / 'GridTalkRelay-{}.exe'.format(release)
+    relay_download = output / 'GridTalk-TS6-Relay-{}.exe'.format(release)
     shutil.copyfile(str(relay), str(relay_download))
 
     for path in (plugin, app, relay_download):
