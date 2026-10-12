@@ -40,6 +40,8 @@
 #define STATUS_MESSAGE (WM_APP + 1)
 #define TRAY_MESSAGE (WM_APP + 2)
 #define MENU_EXIT 1
+#define MENU_AUTOSTART 2
+#define RUN_VALUE L"GridTalk relay"
 
 enum { STATUS_WAITING, STATUS_APPROVAL, STATUS_NO_SERVER, STATUS_LIVE };
 /* Release packaging checks this text for the version and the default port. */
@@ -105,6 +107,8 @@ static unsigned short ts_port = DEFAULT_TS_PORT, udp_port = GRIDTALK_UDP_PORT;
 static unsigned retry_ms = 3000;
 static int dump_mode;
 static wchar_t config_path[MAX_PATH];
+/* Tests pass --run-key so they never touch the real Run key. */
+static wchar_t run_key[200] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 static char api_key[257];
 static HANDLE log_handle = INVALID_HANDLE_VALUE;
 static HANDLE stop_event;
@@ -1193,9 +1197,54 @@ static void run(void) {
     log_line("Stopped");
 }
 
+/* ---- start with Windows --------------------------------------------------------- */
+
+/* The per-user Run key starts the relay at sign-in; no administrator rights needed. */
+static int autostart_command(wchar_t* command, size_t capacity) {
+    wchar_t path[MAX_PATH];
+    DWORD length = GetModuleFileNameW(NULL, path, MAX_PATH);
+    if (!length || length >= MAX_PATH) return 0;
+    return swprintf_s(command, capacity, L"\"%s\"", path) > 0;
+}
+
+static int autostart_enabled(void) {
+    wchar_t expected[MAX_PATH + 3], value[MAX_PATH + 64];
+    DWORD size = sizeof(value);
+    if (!autostart_command(expected, MAX_PATH + 3) ||
+            RegGetValueW(HKEY_CURRENT_USER, run_key, RUN_VALUE, RRF_RT_REG_SZ, NULL, value, &size) != ERROR_SUCCESS)
+        return 0;
+    return _wcsicmp(value, expected) == 0;  /* an entry for a moved copy counts as off */
+}
+
+static int set_autostart(int enable) {
+    wchar_t command[MAX_PATH + 3];
+    HKEY key;
+    LSTATUS result;
+    if (!enable) {
+        result = RegDeleteKeyValueW(HKEY_CURRENT_USER, run_key, RUN_VALUE);
+        return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
+    }
+    if (!autostart_command(command, MAX_PATH + 3) ||
+            RegCreateKeyExW(HKEY_CURRENT_USER, run_key, 0, NULL, 0, KEY_SET_VALUE, NULL, &key, NULL) != ERROR_SUCCESS)
+        return 0;
+    result = RegSetValueExW(key, RUN_VALUE, 0, REG_SZ, (const BYTE*)command, (DWORD)((wcslen(command) + 1) * sizeof(wchar_t)));
+    RegCloseKey(key);
+    return result == ERROR_SUCCESS;
+}
+
 /* ---- tray icon -------------------------------------------------------------- */
 
 static UINT taskbar_created;
+static HICON icons[2];  /* sending, idle */
+
+static void load_icons(void) {
+    /* The relay is DPI aware, so this is the size the tray really draws. */
+    int width = GetSystemMetrics(SM_CXSMICON), height = GetSystemMetrics(SM_CYSMICON), i;
+    for (i = 0; i < 2; ++i) {
+        if (icons[i]) DestroyIcon(icons[i]);
+        icons[i] = (HICON)LoadImageW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(i + 1), IMAGE_ICON, width, height, 0);
+    }
+}
 
 static void tray_icon(DWORD action) {
     NOTIFYICONDATAW icon;
@@ -1205,7 +1254,7 @@ static void tray_icon(DWORD action) {
     icon.uID = 1;
     icon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     icon.uCallbackMessage = TRAY_MESSAGE;
-    icon.hIcon = LoadIconW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(1));
+    icon.hIcon = icons[status == STATUS_LIVE ? 0 : 1];
     if (!icon.hIcon) icon.hIcon = LoadIconW(NULL, (LPCWSTR)IDI_APPLICATION);
     wcscpy_s(icon.szTip, sizeof(icon.szTip) / sizeof(icon.szTip[0]), status_text[status < 0 ? STATUS_WAITING : status]);
     Shell_NotifyIconW(action, &icon);
@@ -1221,6 +1270,7 @@ static LRESULT CALLBACK tray_proc(HWND window, UINT message, WPARAM wparam, LPAR
         HMENU menu = CreatePopupMenu();
         AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, status_text[status < 0 ? STATUS_WAITING : status]);
         AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
+        AppendMenuW(menu, MF_STRING | (autostart_enabled() ? MF_CHECKED : MF_UNCHECKED), MENU_AUTOSTART, L"Start with Windows");
         AppendMenuW(menu, MF_STRING, MENU_EXIT, L"Exit");
         GetCursorPos(&point);
         SetForegroundWindow(window);
@@ -1228,11 +1278,18 @@ static LRESULT CALLBACK tray_proc(HWND window, UINT message, WPARAM wparam, LPAR
         DestroyMenu(menu);
         return 0;
     }
+    if (message == WM_COMMAND && LOWORD(wparam) == MENU_AUTOSTART) {
+        int enable = !autostart_enabled();
+        if (set_autostart(enable)) log_line(enable ? "Will start with Windows" : "Will no longer start with Windows");
+        else MessageBoxW(window, L"Could not change the Windows startup setting.", L"GridTalk relay", MB_OK | MB_ICONWARNING);
+        return 0;
+    }
     if (message == WM_COMMAND && LOWORD(wparam) == MENU_EXIT) {
         DestroyWindow(window);
         return 0;
     }
-    if (message == taskbar_created && taskbar_created) {  /* Explorer restarted */
+    if (message == taskbar_created && taskbar_created) {  /* Explorer restarted, or the display scale changed */
+        load_icons();
         tray_icon(NIM_ADD);
         return 0;
     }
@@ -1285,7 +1342,7 @@ static void open_log(int console) {
 }
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command_line, int show) {
-    int argc, i, console = 0, stop = 0;
+    int argc, i, console = 0, stop = 0, autostart = -1;
     wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     wchar_t name[64], folder[MAX_PATH];
     HANDLE single, thread;
@@ -1301,14 +1358,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command_line, 
         else if (wcscmp(argv[i], L"--udp-port") == 0 && i + 1 < argc && parse_port(argv[i + 1], &udp_port)) ++i;
         else if (wcscmp(argv[i], L"--retry-ms") == 0 && i + 1 < argc) retry_ms = (unsigned)wcstoul(argv[++i], NULL, 10);
         else if (wcscmp(argv[i], L"--config") == 0 && i + 1 < argc) wcscpy_s(config_path, MAX_PATH, argv[++i]);
+        else if (wcscmp(argv[i], L"--start-with-windows") == 0 && i + 1 < argc &&
+                 (wcscmp(argv[i + 1], L"on") == 0 || wcscmp(argv[i + 1], L"off") == 0))
+            autostart = wcscmp(argv[++i], L"on") == 0;
+        else if (wcscmp(argv[i], L"--run-key") == 0 && i + 1 < argc) wcscpy_s(run_key, 200, argv[++i]);
         else {
-            MessageBoxW(NULL, L"Usage: GridTalkRelay [--console] [--dump] [--stop] [--ts-port N] [--udp-port N] [--config FILE]",
+            MessageBoxW(NULL, L"Usage: GridTalkRelay [--console] [--dump] [--stop] [--start-with-windows on|off]\n"
+                        L"                     [--ts-port N] [--udp-port N] [--config FILE]",
                         L"GridTalk relay", MB_OK | MB_ICONINFORMATION);
             return 2;
         }
     }
     if (argv) LocalFree(argv);
     if (retry_ms < 100) retry_ms = 100;
+    if (autostart >= 0) return set_autostart(autostart) ? 0 : 1;
     swprintf_s(name, 64, L"Local\\GridTalkRelayStop-%u", (unsigned)udp_port);
     if (stop) {
         HANDLE running = OpenEventW(EVENT_MODIFY_STATE, FALSE, name);
@@ -1346,6 +1409,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command_line, 
     } else {
         WNDCLASSW window_class;
         MSG message;
+        SetProcessDPIAware();  /* a sharp tray icon at display scaling above 100% */
         memset(&window_class, 0, sizeof(window_class));
         window_class.lpfnWndProc = tray_proc;
         window_class.hInstance = instance;
@@ -1354,6 +1418,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command_line, 
         taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
         tray_window = CreateWindowExW(0, window_class.lpszClassName, L"GridTalk relay", 0, 0, 0, 0, 0, NULL, NULL, instance, NULL);
         if (!tray_window) return 1;
+        load_icons();
         tray_icon(NIM_ADD);
         thread = CreateThread(NULL, 0, network_thread, NULL, 0, NULL);
         if (!thread) return 1;

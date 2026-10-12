@@ -6,7 +6,9 @@
   (`GridTalkRelay-<version>.exe`) that reads your channel from TeamSpeak's
   Remote Apps API and sends it to the overlay. The overlay is unchanged. It
   asks for approval in TeamSpeak once, follows the server tab whose microphone
-  is active, and reconnects when TeamSpeak restarts.
+  is active, and reconnects when TeamSpeak restarts. Its tray icon turns green
+  while it is sending your channel, and its menu has a *Start with Windows*
+  option.
 
 ## 0.5.2 — 2026-10-12
 

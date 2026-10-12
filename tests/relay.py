@@ -399,6 +399,65 @@ except BaseException:
     print('\n'.join(log[-40:]), file=sys.stderr)
     raise
 
+# Start with Windows writes and removes a per-user Run entry; tests use their own key.
+import re  # noqa: E402
+import winreg  # noqa: E402
+test_key = r'Software\GridTalkRelayTest\Run'
+try:
+    subprocess.run([str(exe), '--run-key', test_key, '--start-with-windows', 'on'], check=True, timeout=10)
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, test_key) as key:
+        assert winreg.QueryValueEx(key, 'GridTalk relay') == ('"{}"'.format(exe.resolve()), winreg.REG_SZ)
+    subprocess.run([str(exe), '--run-key', test_key, '--start-with-windows', 'off'], check=True, timeout=10)
+    subprocess.run([str(exe), '--run-key', test_key, '--start-with-windows', 'off'], check=True, timeout=10)  # already off
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, test_key) as key:
+        try:
+            winreg.QueryValueEx(key, 'GridTalk relay')
+            raise AssertionError('Run entry was not removed')
+        except FileNotFoundError:
+            pass
+finally:
+    for path in (test_key, r'Software\GridTalkRelayTest'):
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
+        except OSError:
+            pass
+
+# The exe carries both tray icons and version details matching the project version.
+version = re.search(r'project\(GridTalk VERSION (\S+)', (root / 'CMakeLists.txt').read_text(encoding='utf-8')).group(1)
+kernel32.LoadLibraryExW.restype = ctypes.c_void_p
+kernel32.FindResourceW.restype = ctypes.c_void_p
+kernel32.FindResourceW.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+module = kernel32.LoadLibraryExW(str(exe), None, 0x2 | 0x20)  # as a data file / image resource
+assert module, 'could not open the exe as a resource file'
+assert all(kernel32.FindResourceW(module, ctypes.c_void_p(icon), ctypes.c_void_p(14)) for icon in (1, 2)), 'missing icon'
+kernel32.FreeLibrary(ctypes.c_void_p(module))
+versions = ctypes.WinDLL('version')
+size = versions.GetFileVersionInfoSizeW(str(exe), None)
+info = ctypes.create_string_buffer(size)
+assert versions.GetFileVersionInfoW(str(exe), 0, size, info)
+text, length = ctypes.c_wchar_p(), ctypes.c_uint()
+assert versions.VerQueryValueW(info, r'\StringFileInfo\040904b0\ProductVersion', ctypes.byref(text), ctypes.byref(length))
+assert text.value == version, (text.value, version)
+
+# Tray mode (the default) starts, waits for TeamSpeak, and stops cleanly with --stop.
+closed = socket.socket()
+closed.bind(('127.0.0.1', 0))
+closed_port = closed.getsockname()[1]
+closed.close()
+tray_config = Path(tempfile.mkdtemp()) / 'relay.ini'
+tray = subprocess.Popen([str(exe), '--ts-port', str(closed_port), '--udp-port', str(udp_port), '--config', str(tray_config),
+                         '--run-key', test_key])
+try:
+    time.sleep(1.5)
+    assert tray.poll() is None, 'tray mode exited early'
+    subprocess.run([str(exe), '--stop', '--udp-port', str(udp_port)], check=True, timeout=10)
+    assert tray.wait(timeout=10) == 0
+finally:
+    if tray.poll() is None:
+        tray.kill()
+tray_log = (tray_config.parent / 'relay.log').read_text(encoding='utf-8')
+assert 'Waiting for TeamSpeak' in tray_log and 'Stopped' in tray_log, tray_log
+
 # The AC receiver accepts the relay's packets and shows the same roster.
 ac = types.ModuleType('ac')
 for name in ('newApp', 'addLabel', 'newTexture'):
@@ -420,4 +479,5 @@ assert app._connected
 
 print('PASS: relay handshake, approval hint and saved key, talk/move/join/leave/rename, fragments and pings')
 print('PASS: pagination, active-tab switching, disconnects, reconnect, refused key, --stop, schema and receiver replay')
+print('PASS: start with Windows on/off, icon and version resources, tray mode start and --stop')
 print('PASS: relay peak working set {:.1f} MB, private {:.1f} MB, CPU {:.2f} s over the run'.format(peak_mb, private_mb, cpu))

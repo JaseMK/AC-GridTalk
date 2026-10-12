@@ -31,10 +31,11 @@ if(MSVC)
 endif()
 
 # TeamSpeak 5/6 relay: a standalone tray app, so link the C runtime statically.
-add_executable(gridtalk_relay WIN32 relay/relay.c relay/json.c)
+add_executable(gridtalk_relay WIN32 relay/relay.c relay/json.c relay/relay.rc)
 target_compile_definitions(gridtalk_relay PRIVATE GRIDTALK_UDP_PORT=${GRIDTALK_UDP_PORT} GRIDTALK_VERSION="${PROJECT_VERSION}"
-                           UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(gridtalk_relay PRIVATE ws2_32 bcrypt shell32 user32)
+                           GRIDTALK_VERSION_MAJOR=${PROJECT_VERSION_MAJOR} GRIDTALK_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+                           GRIDTALK_VERSION_PATCH=${PROJECT_VERSION_PATCH} UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS)
+target_link_libraries(gridtalk_relay PRIVATE ws2_32 bcrypt shell32 user32 advapi32)
 set_target_properties(gridtalk_relay PROPERTIES OUTPUT_NAME GridTalkRelay
                       MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 if(MSVC)

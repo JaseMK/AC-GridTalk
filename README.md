@@ -44,10 +44,11 @@ Download the files you need from the [latest release](../../releases/latest):
    **Or, for TeamSpeak 5/6, the relay**: save `GridTalkRelay-<version>.exe`
    somewhere permanent (for example `Documents\GridTalk`) and run it. Windows
    may warn that the file is unsigned; choose *More info → Run anyway*. A
-   GridTalk icon appears in the notification area, and TeamSpeak asks whether
-   to allow **GridTalk** as a Remote App: allow it once. To start the relay
-   with Windows, put a shortcut to it in your Startup folder (press Win+R and
-   run `shell:startup`).
+   GridTalk icon appears in the notification area (Windows may tuck it under
+   the **^** arrow; drag it onto the taskbar to keep it visible), and
+   TeamSpeak asks whether to allow **GridTalk** as a Remote App: allow it
+   once. To start the relay automatically, click its icon and tick
+   **Start with Windows**.
 2. **Assetto Corsa app**: extract `GridTalk-<version>.zip` into your Assetto
    Corsa folder (for Steam, usually
    `C:\Program Files (x86)\Steam\steamapps\common\assettocorsa`). This creates
@@ -70,9 +71,9 @@ restart TeamSpeak.
 
 **Uninstall:** remove the plugin in TeamSpeak's *Addons* page, and delete
 `apps\python\GridTalk` from the Assetto Corsa folder. For the relay, choose
-*Exit* from its tray icon, delete the `.exe` (and any Startup shortcut) and the
-`%APPDATA%\GridTalk` folder, and remove GridTalk under TeamSpeak's
-*Settings → Remote Apps*.
+*Exit* from its tray icon (untick *Start with Windows* first if you ticked it),
+delete the `.exe` and the `%APPDATA%\GridTalk` folder, and remove GridTalk under
+TeamSpeak's *Settings → Remote Apps*.
 
 ## Options
 
@@ -118,7 +119,8 @@ TeamSpeak 5/6 relay:
 
 - **Allow GridTalk in TeamSpeak (Remote Apps)** in the overlay means the relay
   is waiting for you to approve it in TeamSpeak.
-- The tray icon's tooltip shows what the relay is doing. Its log is
+- The tray icon's lamp is green while the relay is sending your channel and
+  grey otherwise; its tooltip says why. Its log is
   `%APPDATA%\GridTalk\relay.log`; it is rewritten each time the relay starts.
 - If you declined the TeamSpeak prompt, or removed GridTalk from
   *Settings → Remote Apps*, restart the relay to be asked again.
@@ -205,7 +207,7 @@ built for the test port or a different version.
 | `ac_app/GridTalk/` | Assetto Corsa app (copied as-is into `apps/python`) |
 | `protocol/`, `docs/SENDER_PROTOCOL.md` | Wire protocol for other senders |
 | `tests/` | Native, overlay, schema and AC-runtime tests |
-| `tools/` | Packaging, packet listener, benchmark, UI texture generator |
+| `tools/` | Packaging, packet listener, benchmark, UI texture and relay icon generators |
 
 ## Licence
 
