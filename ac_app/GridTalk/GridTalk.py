@@ -154,14 +154,14 @@ def _alias_label(key):
 
 
 def _read_aliases():
-    """Return ({key: alias}, [keys in file order], {keys ticked for removal}, in the current format)."""
-    aliases, keys, removals, ticks, legacy = {}, [], set(), False, False
+    """Return ({key: alias}, [keys in file order], whether an earlier build wrote the file)."""
+    aliases, keys, outdated = {}, [], False
     try:
         with open(os.path.join(_CONFIG_DIR, ALIAS_FILE), encoding='utf-8-sig', errors='replace') as handle:
             for line in handle:
                 line = line.split(';', 1)[0].strip()
                 if line.startswith('['):
-                    legacy = legacy or line == LEGACY_INFO_SECTION
+                    outdated = outdated or line == LEGACY_INFO_SECTION
                 elif line[:2].lower() == 'n_' and '=' in line:
                     key, value = line.split('=', 1)
                     key = key.strip().lower()
@@ -169,22 +169,15 @@ def _read_aliases():
                         keys.append(key)
                     aliases[key] = ' '.join(value.split())[:MAX_ALIAS_CHARS]
                 elif line[:2].lower() == 'd_' and '=' in line:
-                    ticks = True
-                    key, value = line.split('=', 1)
-                    if value.strip().lower() in ('true', '1', 'yes', 'on'):
-                        removals.add('n_' + key.strip()[2:].lower())
+                    outdated = True  # Tick boxes from a development build.
     except (OSError, ValueError):
         pass
-    return aliases, keys, removals, ticks and not legacy
+    return aliases, keys, outdated
 
 
 def _write_aliases(aliases, keys):
-    # Each name has an alias box and a tick box: Content Manager has no button to run a command.
     lines = ['[ALIASES]']
-    for key in keys:
-        label = _alias_label(key)
-        lines.append('{}={} ; Alias for {}'.format(key, aliases[key], label))
-        lines.append('d_{}=false ; Remove {} from this list'.format(key[2:], label))
+    lines.extend('{}={} ; Alias for {}'.format(key, aliases[key], _alias_label(key)) for key in keys)
     path = os.path.join(_CONFIG_DIR, ALIAS_FILE)
     temporary = path + '.tmp'
     with open(temporary, 'w', encoding='utf-8') as handle:
@@ -202,14 +195,11 @@ def _migrate_alias_file():
         pass
 
 
-def _read_and_prune():
-    """Read the alias file, drop the names the user ticked for removal, and upgrade an older file."""
+def _read_and_tidy():
+    """Read the alias file, rewriting it first if a development build left extras in it."""
     global _alias_write_failed
-    aliases, keys, removals, current = _read_aliases()
-    gone = [key for key in keys if key in removals]
-    if gone or (keys and not current):
-        keys = [key for key in keys if key not in removals]
-        aliases = dict((key, aliases[key]) for key in keys)
+    aliases, keys, outdated = _read_aliases()
+    if keys and outdated:
         try:
             _write_aliases(aliases, keys)
             _alias_write_failed = False
@@ -222,7 +212,7 @@ def _read_and_prune():
 
 def _load_aliases():
     global _aliases, _aliases_mtime, _dirty
-    aliases = dict((key, value) for key, value in _read_and_prune()[0].items() if value)
+    aliases = dict((key, value) for key, value in _read_and_tidy()[0].items() if value)
     try:
         _aliases_mtime = os.stat(os.path.join(_CONFIG_DIR, ALIAS_FILE)).st_mtime
     except OSError:
@@ -239,7 +229,7 @@ def _record_names(names):
     if not fresh:
         return  # Nothing new, so no file access on ordinary frames.
     _recorded.update(_alias_key(name) for name in fresh)
-    aliases, keys = _read_and_prune()  # Re-read first so edits made in Content Manager are kept.
+    aliases, keys = _read_and_tidy()  # Re-read first so edits made in Content Manager are kept.
     added = False
     for name in fresh:
         key = _alias_key(name)

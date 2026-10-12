@@ -74,11 +74,8 @@ GridTalk*. Changes apply the next time you start a session.
 The *Aliases* page, shown after the main options, lists the people GridTalk
 has seen, so it grows as you meet people (up to 200). Type a name like "Simon"
 in someone's *Alias* box and the overlay shows that instead; leave it empty to
-keep their real name. To drop someone from the list, tick *Remove … from this
-list* and save; their alias goes with them. Content Manager has no buttons, so
-the removal happens when GridTalk next checks the file, within a second or two
-while a session is running or when the next one starts. Someone you remove is
-added again the next time you meet them.
+keep their real name. Changes are picked up within a second or two while a
+session is running.
 
 Aliases belong to a TeamSpeak display name, so if someone renames themselves
 they need a new alias. Once the list is full the oldest names without an alias

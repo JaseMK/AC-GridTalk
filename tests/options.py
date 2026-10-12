@@ -172,9 +172,9 @@ text = alias_file.read_text(encoding="utf-8")
 crow = app._alias_key("BigCrow88")
 lines = text.splitlines()
 assert lines[0] == "[ALIASES]" and "\u2139" not in text  # no info section, so no info icon
-assert len(lines) == 1 + 2 * 2  # two names, each with an alias box and a remove tick; the unnamed one is not logged
+assert len(lines) == 1 + 2  # two names; the unnamed one is not logged
 assert crow + "= ; Alias for BigCrow88" in text
-assert "d_" + crow[2:] + "=false ; Remove BigCrow88 from this list" in text
+assert "d_" not in text  # one box per name
 assert "; Alias for Zed [x], odd 日本" in text
 assert all(re.match(r"^[\w -]+=", line) for line in lines[1:])  # legal keys for Content Manager
 assert [texts[row] for row in app._rows[:3]] == ["Client 3", "BigCrow88", odd]
@@ -207,26 +207,15 @@ app._members[("t", 5)] = dict(client_id=5, name="Fifth", talking=False, self=Fal
 app._dirty = True
 app._render(603.0)
 text = alias_file.read_text(encoding="utf-8")
-assert crow + "=Simon ;" in text and len(text.splitlines()) == 1 + 2 * 3 and app._alias_key("Fifth") in text
-# Ticking "remove" drops the name and its alias, and it is not logged again this session.
-fifth = app._alias_key("Fifth")
-alias_file.write_text(text.replace("d_" + fifth[2:] + "=false", "d_" + fifth[2:] + "=true")
-                      .replace(crow + "=Simon", crow + "=Simon2"), encoding="utf-8")
-os.utime(str(alias_file), (stamp / 1e9 + 9, stamp / 1e9 + 9))
-app._last_health = 0
-clock[0] = 605.0
-app._last_packet = 605.0
-app.acUpdate(0.016)
-text = alias_file.read_text(encoding="utf-8")
-assert fifth not in text and crow + "=Simon2 ;" in text and len(text.splitlines()) == 1 + 2 * 2
-app._dirty = True
-app._render(605.5)
-assert fifth not in alias_file.read_text(encoding="utf-8")
-# An older file (no info section, no tick boxes) is upgraded in place.
-alias_file.write_text("[ALIASES]\n" + crow + "=Old ; x\n", encoding="utf-8")
+assert crow + "=Simon ;" in text and len(text.splitlines()) == 1 + 3 and app._alias_key("Fifth") in text
+# Tick boxes written by a development build are stripped; the aliases stay.
+alias_file.write_text(text + "d_" + crow[2:] + "=true ; Remove\n", encoding="utf-8")
 app._load_aliases()
 text = alias_file.read_text(encoding="utf-8")
-assert text.startswith("[ALIASES]") and crow + "=Old ;" in text and "d_" + crow[2:] + "=false" in text
+assert "d_" not in text and crow + "=Simon ;" in text and len(text.splitlines()) == 1 + 3
+alias_file.write_text("[ALIASES]\n" + crow + "=Old ; x\n", encoding="utf-8")
+app._load_aliases()
+assert app._aliases == {crow: "Old"}
 # A file written by 0.5.1 (info section, which shows an icon) loses the section.
 alias_file.write_text("[\u2139]\nORDER=1\n\n[ALIASES]\n" + crow + "=Kept ; x\nd_" + crow[2:] + "=false ; y\n",
                       encoding="utf-8")
